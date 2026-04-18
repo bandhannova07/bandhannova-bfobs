@@ -6,6 +6,8 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/bandhannova/api-hunter/internal/config"
@@ -33,16 +35,16 @@ func ProxyHandler(c *fiber.Ctx) error {
 		var keyID, cardID, encrypted, cardEndpoint, platformType string
 		
 		err := database.Router.GetGlobalManagerDB().QueryRow(`
-			SELECT k.id, k.card_id, k.encrypted_value, c.endpoint_url, c.platform_type
+			SELECT k.id, k.card_id, k.encrypted_value, c.endpoint_url
 			FROM managed_api_keys k
 			JOIN api_cards c ON k.card_id = c.id
 			WHERE (c.name = ? OR k.provider = ?) AND k.status = 'active' AND k.is_deleted = 0
 			ORDER BY k.updated_at ASC
 			LIMIT 1
-		`, provider, provider).Scan(&keyID, &cardID, &encrypted, &cardEndpoint, &platformType)
+		`, provider, provider).Scan(&keyID, &cardID, &encrypted, &cardEndpoint)
 
 		if err != nil {
-			break // No more keys to try
+			break
 		}
 
 		apiKey, _ := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
@@ -70,10 +72,23 @@ func ProxyHandler(c *fiber.Ctx) error {
 		fakeIP := fmt.Sprintf("%d.%d.%d.%d", rand.Intn(254)+1, rand.Intn(254)+1, rand.Intn(254)+1, rand.Intn(254)+1)
 		req.Header.Set("X-Forwarded-For", fakeIP)
 		
-		if platformType == "anthropic" {
+		// Smart Architecture Detection
+		if strings.Contains(cardEndpoint, "anthropic.com") {
 			req.Header.Set("x-api-key", apiKey)
 			req.Header.Set("anthropic-version", "2023-06-01")
+		} else if strings.Contains(cardEndpoint, "googlegenesis") || strings.Contains(cardEndpoint, "generativelanguage") {
+			// Google style often uses ?key= API_KEY
+			if !strings.Contains(fullURL, "key=") {
+				if strings.Contains(fullURL, "?") {
+					fullURL += "&key=" + apiKey
+				} else {
+					fullURL += "?key=" + apiKey
+				}
+				// Re-create request with new URL if needed
+				req.URL, _ = url.Parse(fullURL)
+			}
 		} else {
+			// Default: OpenAI Compatible
 			req.Header.Set("Authorization", "Bearer "+apiKey)
 		}
 

@@ -583,7 +583,8 @@ func getShardMetrics(db *sql.DB, name, shardType string, tables []string) ShardS
 
 	// Check Health
 	if err := db.Ping(); err != nil {
-		stats.Status = "Error"
+		stats.Status = "Offline"
+		return stats
 	}
 
 	// Get Storage Usage (PRAGMA)
@@ -592,12 +593,16 @@ func getShardMetrics(db *sql.DB, name, shardType string, tables []string) ShardS
 	_ = db.QueryRow("PRAGMA page_size").Scan(&pageSize)
 	stats.Storage = pageCount * pageSize
 
-	// Get Row Counts
+	// Get Row Counts (Gently)
 	for _, table := range tables {
 		var count int
 		query := fmt.Sprintf("SELECT COUNT(*) FROM %s", table)
-		_ = db.QueryRow(query).Scan(&count)
-		stats.RowCounts[table] = count
+		err := db.QueryRow(query).Scan(&count)
+		if err != nil {
+			stats.RowCounts[table] = 0 // Table might not exist yet
+		} else {
+			stats.RowCounts[table] = count
+		}
 	}
 
 	return stats

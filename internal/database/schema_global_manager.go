@@ -34,6 +34,26 @@ CREATE TABLE IF NOT EXISTS managed_databases (
     FOREIGN KEY(product_id) REFERENCES managed_products(id)
 );
 
+CREATE TABLE IF NOT EXISTS oauth_clients (
+    client_id TEXT PRIMARY KEY,
+    client_secret TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    redirect_uris TEXT NOT NULL, -- JSON array of strings
+    grants TEXT DEFAULT '["authorization_code", "refresh_token"]',
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (product_id) REFERENCES managed_products(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS oauth_authorizations (
+    code TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    user_id TEXT NOT NULL, -- User ID from Shards
+    scope TEXT,
+    expires_at INTEGER NOT NULL,
+    redirect_uri TEXT,
+    FOREIGN KEY (client_id) REFERENCES oauth_clients(client_id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS managed_api_keys (
     id TEXT PRIMARY KEY,
     provider TEXT NOT NULL,

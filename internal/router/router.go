@@ -7,6 +7,7 @@ import (
 	"github.com/bandhannova/api-hunter/internal/modules/admin"
 	"github.com/bandhannova/api-hunter/internal/modules/ai"
 	"github.com/bandhannova/api-hunter/internal/modules/auth"
+	"github.com/bandhannova/api-hunter/internal/modules/auth_provider"
 	"github.com/bandhannova/api-hunter/internal/modules/database_mgmt"
 	"github.com/bandhannova/api-hunter/internal/modules/email"
 	"github.com/bandhannova/api-hunter/internal/modules/market"
@@ -18,11 +19,17 @@ import (
 
 // SetupRoutes configures all routes for the BFOBS Gateway
 func SetupRoutes(app *fiber.App) {
+	api := app.Group("/api")
+	v1 := api.Group("/v1", middleware.RedisRateLimiter(60, time.Minute))
+
+	// OAuth 2.0 / BandhanNova ID Routes
+	oauth := v1.Group("/oauth")
+	oauth.Get("/authorize", auth_provider.Authorize)
+	oauth.Post("/token", auth_provider.Token)
+	oauth.Get("/userinfo", auth_provider.UserInfo)
+
 	// Root Landing Page (Animated Status)
 	app.Get("/", system.ServeStatusPage)
-
-	// API Gateway Versioning
-	v1 := app.Group("/v1", middleware.RedisRateLimiter(60, time.Minute))
 
 	// Admin Control Center (Requires Master Key HMAC)
 	adminGroup := v1.Group("/admin")

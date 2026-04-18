@@ -2,10 +2,12 @@ package database_mgmt
 
 import (
 	"database/sql"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
-	"sync"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bandhannova/api-hunter/internal/config"
@@ -30,16 +32,18 @@ type DatabaseResponse struct {
 }
 
 type ProductResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	AppType     string `json:"app_type"`
-	AppURL      string `json:"app_url"`
-	Description string `json:"description"`
-	Icon        string `json:"icon"`
-	Status      string `json:"status"`
-	CreatedAt   int64  `json:"created_at"`
-	UpdatedAt   int64  `json:"updated_at"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Slug         string `json:"slug"`
+	AppType      string `json:"app_type"`
+	AppURL       string `json:"app_url"`
+	Description  string `json:"description"`
+	Icon         string `json:"icon"`
+	ClientID     string `json:"client_id,omitempty"`
+	ClientSecret string `json:"client_secret,omitempty"`
+	Status       string `json:"status"`
+	CreatedAt    int64  `json:"created_at"`
+	UpdatedAt    int64  `json:"updated_at"`
 }
 
 // ReloadManagedDatabases hot-swaps active DBs from the global managed_databases table
@@ -393,7 +397,12 @@ func ListProducts(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Global DB not connected"})
 	}
 
-	rows, err := database.Router.GetGlobalManagerDB().Query("SELECT id, name, slug, app_type, app_url, description, icon, status, created_at, updated_at FROM managed_products ORDER BY created_at DESC")
+	rows, err := database.Router.GetGlobalManagerDB().Query(`
+		SELECT p.id, p.name, p.slug, p.app_type, p.app_url, p.description, p.icon, p.status, p.created_at, p.updated_at, c.client_id, c.client_secret
+		FROM managed_products p
+		LEFT JOIN oauth_clients c ON p.id = c.product_id
+		ORDER BY p.created_at DESC
+	`)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to query products"})
 	}
@@ -402,11 +411,13 @@ func ListProducts(c *fiber.Ctx) error {
 	var products []ProductResponse
 	for rows.Next() {
 		var p ProductResponse
-		var appType, appURL, icon sql.NullString
-		if err := rows.Scan(&p.ID, &p.Name, &p.Slug, &appType, &appURL, &p.Description, &icon, &p.Status, &p.CreatedAt, &p.UpdatedAt); err == nil {
+		var appType, appURL, icon, clientID, clientSecret sql.NullString
+		if err := rows.Scan(&p.ID, &p.Name, &p.Slug, &appType, &appURL, &p.Description, &icon, &p.Status, &p.CreatedAt, &p.UpdatedAt, &clientID, &clientSecret); err == nil {
 			if appType.Valid { p.AppType = appType.String }
 			if appURL.Valid { p.AppURL = appURL.String }
 			if icon.Valid { p.Icon = icon.String }
+			if clientID.Valid { p.ClientID = clientID.String }
+			if clientSecret.Valid { p.ClientSecret = clientSecret.String }
 			products = append(products, p)
 		}
 	}
@@ -437,17 +448,38 @@ func AddProduct(c *fiber.Ctx) error {
 	slug := strings.ToLower(strings.ReplaceAll(req.Name, " ", "-"))
 	now := time.Now().Unix()
 
-	_, err := database.Router.GetGlobalManagerDB().Exec(
+	// Auto-generate OAuth Credentials
+	clientID := "bn_" + strings.ReplaceAll(uuid.New().String(), "-", "")[:16]
+	clientSecret := base64.StdEncoding.EncodeToString([]byte(uuid.New().String() + uuid.New().String()))[:48]
+
+	tx, err := database.Router.GetGlobalManagerDB().Begin()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Transaction failed"})
+	}
+
+	_, err = tx.Exec(
 		"INSERT INTO managed_products (id, name, slug, app_type, app_url, description, icon, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
 		id, req.Name, slug, req.AppType, req.AppURL, req.Description, req.Icon, now, now,
 	)
 	if err != nil {
+		tx.Rollback()
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to save product"})
 	}
 
-	admin.LogAudit("ADD_PRODUCT", req.Name, ip, fmt.Sprintf("Added product: %s", req.Name))
+	_, err = tx.Exec(
+		"INSERT INTO oauth_clients (client_id, client_secret, product_id, redirect_uris, created_at) VALUES (?, ?, ?, ?, ?)",
+		clientID, clientSecret, id, "[]", now,
+	)
+	if err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create OAuth client"})
+	}
 
-	return c.JSON(fiber.Map{"success": true, "message": "Product added successfully", "id": id})
+	tx.Commit()
+
+	admin.LogAudit("ADD_PRODUCT", req.Name, ip, fmt.Sprintf("Added product: %s (Client: %s)", req.Name, clientID))
+
+	return c.JSON(fiber.Map{"success": true, "message": "Product added with OAuth credentials", "id": id, "client_id": clientID, "client_secret": clientSecret})
 }
 
 func UpdateProduct(c *fiber.Ctx) error {

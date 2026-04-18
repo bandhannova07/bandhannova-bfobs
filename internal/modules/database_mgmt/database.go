@@ -580,6 +580,38 @@ func DeleteProduct(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "message": "Product deleted and shards wiped successfully"})
 }
 
+func ResetOAuthCredentials(c *fiber.Ctx) error {
+	id := c.Params("id")
+	ip, _ := c.Locals("admin_ip").(string)
+
+	now := time.Now().Unix()
+	clientID := "bn_" + strings.ReplaceAll(uuid.New().String(), "-", "")[:16]
+	clientSecret := base64.StdEncoding.EncodeToString([]byte(uuid.New().String() + uuid.New().String()))[:48]
+
+	tx, err := database.Router.GetGlobalManagerDB().Begin()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Transaction failed"})
+	}
+
+	// Delete old if exists
+	tx.Exec("DELETE FROM oauth_clients WHERE product_id = ?", id)
+
+	// Insert new
+	_, err = tx.Exec(
+		"INSERT INTO oauth_clients (client_id, client_secret, product_id, redirect_uris, created_at) VALUES (?, ?, ?, ?, ?)",
+		clientID, clientSecret, id, "[]", now,
+	)
+	if err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create OAuth client"})
+	}
+
+	tx.Commit()
+
+	admin.LogAudit("RESET_OAUTH", id, ip, fmt.Sprintf("Reset OAuth credentials for product ID: %s", id))
+	return c.JSON(fiber.Map{"success": true, "client_id": clientID, "client_secret": clientSecret})
+}
+
 // GetPulseHealth returns real-time health data for all shards
 func GetPulseHealth(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{

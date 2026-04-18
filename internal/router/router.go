@@ -61,6 +61,7 @@ func SetupRoutes(app *fiber.App) {
 	adminAuth.Post("/products", database_mgmt.AddProduct)
 	adminAuth.Put("/products/:id", database_mgmt.UpdateProduct)
 	adminAuth.Post("/products/:id/delete", database_mgmt.DeleteProduct)
+	adminAuth.Post("/products/:id/reset-oauth", database_mgmt.ResetOAuthCredentials)
 
 	// User Auth Routes
 	authGroup := v1.Group("/auth")

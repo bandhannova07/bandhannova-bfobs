@@ -1,7 +1,6 @@
 package api_mgmt
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"

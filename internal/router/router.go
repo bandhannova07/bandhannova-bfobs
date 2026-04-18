@@ -19,8 +19,7 @@ import (
 
 // SetupRoutes configures all routes for the BFOBS Gateway
 func SetupRoutes(app *fiber.App) {
-	api := app.Group("/api")
-	v1 := api.Group("/v1", middleware.RedisRateLimiter(60, time.Minute))
+	v1 := app.Group("/v1", middleware.RedisRateLimiter(60, time.Minute))
 
 	// OAuth 2.0 / BandhanNova ID Routes
 	oauth := v1.Group("/oauth")

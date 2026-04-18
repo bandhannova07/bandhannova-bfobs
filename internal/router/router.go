@@ -7,6 +7,7 @@ import (
 	"github.com/bandhannova/api-hunter/internal/modules/admin"
 	"github.com/bandhannova/api-hunter/internal/modules/ai"
 	"github.com/bandhannova/api-hunter/internal/modules/api_mgmt"
+	"github.com/bandhannova/api-hunter/internal/modules/api_proxy"
 	"github.com/bandhannova/api-hunter/internal/modules/auth"
 	"github.com/bandhannova/api-hunter/internal/modules/auth_provider"
 	"github.com/bandhannova/api-hunter/internal/modules/database_mgmt"
@@ -54,6 +55,7 @@ func SetupRoutes(app *fiber.App) {
 	adminAuth.Post("/api/items/:type/:id/delete", api_mgmt.DeleteAPIItem)
 	adminAuth.Get("/api/unused", api_mgmt.ListUnused)
 	adminAuth.Delete("/api/unused/:type/:id", api_mgmt.PermanentDelete)
+	adminAuth.Get("/api/logs", api_proxy.ListLogs)
 
 	// Admin Key Management (Legacy Support)
 	adminAuth.Get("/keys", admin.ListManagedKeys)
@@ -97,6 +99,9 @@ func SetupRoutes(app *fiber.App) {
 	v1.Post("/search", search.ProxyTavily)              // AI Search
 	v1.Post("/market/quote", market.ProxyTwelveData)    // Stock quotes
 	v1.Post("/email/send", email.ProxyEmailSend)        // Send emails
+
+	// Universal API Proxy Gateway (Rotation + Logging)
+	v1.All("/proxy/:provider/*", api_proxy.ProxyHandler)
 
 	// Webhooks
 	app.Post("/webhooks/resend", email.HandleEmailWebhook)

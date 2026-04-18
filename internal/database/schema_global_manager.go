@@ -95,6 +95,20 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
     details TEXT,
     timestamp INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS api_usage_logs (
+    id TEXT PRIMARY KEY,
+    key_id TEXT NOT NULL,
+    card_id TEXT NOT NULL,
+    method TEXT NOT NULL,
+    path TEXT NOT NULL,
+    status_code INTEGER,
+    latency_ms INTEGER,
+    ip_address TEXT,
+    timestamp INTEGER NOT NULL,
+    FOREIGN KEY (key_id) REFERENCES managed_api_keys(id),
+    FOREIGN KEY (card_id) REFERENCES api_cards(id)
+);
 `
 
 // InitGlobalManagerSchema applies the global manager schema and handles migrations

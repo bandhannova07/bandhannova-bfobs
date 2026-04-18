@@ -53,11 +53,20 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 );
 `
 
-// InitGlobalManagerSchema applies the global manager schema to the global shard
+// InitGlobalManagerSchema applies the global manager schema and handles migrations
 func InitGlobalManagerSchema(db *sql.DB) error {
 	_, err := db.Exec(GlobalManagerSchema)
 	if err != nil {
 		return fmt.Errorf("failed to apply global manager schema: %w", err)
 	}
+
+	// ─── AUTO-MIGRATIONS FOR EXISTING TABLES ────────────────────────────────
+	
+	// Add product_id to managed_databases if missing
+	_, _ = db.Exec("ALTER TABLE managed_databases ADD COLUMN product_id TEXT")
+	
+	// Add url to managed_products if missing
+	_, _ = db.Exec("ALTER TABLE managed_products ADD COLUMN url TEXT")
+
 	return nil
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"strings"
 	"github.com/bandhannova/api-hunter/internal/config"
 	"github.com/bandhannova/api-hunter/internal/database"
 )
@@ -21,7 +20,7 @@ func main() {
 	}
 
 	rows, err := database.Router.GetGlobalManagerDB().Query(`
-		SELECT s.name, c.name, c.endpoint_url 
+		SELECT s.name, c.name, c.id, (SELECT COUNT(*) FROM managed_api_keys WHERE card_id = c.id AND status = 'active' AND is_deleted = 0)
 		FROM api_cards c 
 		JOIN api_sections s ON c.section_id = s.id
 	`)
@@ -30,15 +29,12 @@ func main() {
 	}
 	defer rows.Close()
 
-	fmt.Println("API CARDS & SLUGS:")
+	fmt.Println("API CARDS & KEY COUNTS:")
 	for rows.Next() {
-		var sname, cname, url string
-		rows.Scan(&sname, &cname, &url)
+		var sname, cname, cid string
+		var count int
+		rows.Scan(&sname, &cname, &cid, &count)
 		
-		// Simulate SQL: REPLACE(LOWER(name), ' ', '-')
-		sslug := strings.ReplaceAll(strings.ToLower(sname), " ", "-")
-		cslug := strings.ReplaceAll(strings.ToLower(cname), " ", "-")
-		
-		fmt.Printf("[%s] %s -> slugs: /%s/%s/execute\n", sname, cname, sslug, cslug)
+		fmt.Printf("[%s] %s (ID: %s) -> Active Keys: %d\n", sname, cname, cid, count)
 	}
 }

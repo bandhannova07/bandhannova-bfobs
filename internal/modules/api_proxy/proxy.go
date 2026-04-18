@@ -238,8 +238,16 @@ func EcosystemProxyHandler(c *fiber.Ctx) error {
 		genCardSlug := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(cname)), " ", "-")
 		
 		if genSectionSlug == sectionSlug && (genCardSlug == cardSlug || cid == cardSlug) {
-			cardID = cid
-			break
+			// Check if this card has active keys
+			var count int
+			database.Router.GetGlobalManagerDB().QueryRow("SELECT COUNT(*) FROM managed_api_keys WHERE card_id = ? AND status = 'active' AND is_deleted = 0", cid).Scan(&count)
+			
+			if count > 0 {
+				cardID = cid
+				break
+			}
+			// If no keys, keep looking (there might be another card with the same name that has keys)
+			cardID = cid 
 		}
 	}
 

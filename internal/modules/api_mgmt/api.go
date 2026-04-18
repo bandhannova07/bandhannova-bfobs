@@ -1,0 +1,287 @@
+package api_mgmt
+
+import (
+	"database/sql"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/bandhannova/api-hunter/internal/config"
+	"github.com/bandhannova/api-hunter/internal/database"
+	"github.com/bandhannova/api-hunter/internal/modules/admin"
+	"github.com/bandhannova/api-hunter/internal/security"
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+)
+
+type APISection struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt int64     `json:"created_at"`
+	CardCount int       `json:"card_count"`
+}
+
+type APICard struct {
+	ID          string `json:"id"`
+	SectionID   string `json:"section_id"`
+	Name        string `json:"name"`
+	Icon        string `json:"icon"`
+	Description string `json:"description"`
+	KeyCount    int    `json:"key_count"`
+	IsDeleted   bool   `json:"is_deleted"`
+	CreatedAt   int64  `json:"created_at"`
+}
+
+type APIKeyResponse struct {
+	ID            string `json:"id"`
+	CardID        string `json:"card_id"`
+	Label         string `json:"label"`
+	Status        string `json:"status"`
+	MaskedValue   string `json:"masked_value"`
+	APIURL        string `json:"api_url"`
+	UseURL        bool   `json:"use_url"`
+	IsDeleted     bool   `json:"is_deleted"`
+	CreatedAt     int64  `json:"created_at"`
+	UpdatedAt     int64  `json:"updated_at"`
+}
+
+// ─── SECTIONS ────────────────────────────────────────────────────────────────
+
+func ListSections(c *fiber.Ctx) error {
+	rows, err := database.Router.GetGlobalManagerDB().Query(`
+		SELECT s.id, s.name, s.created_at, COUNT(c.id) as card_count
+		FROM api_sections s
+		LEFT JOIN api_cards c ON s.id = c.section_id AND c.is_deleted = 0
+		GROUP BY s.id
+		ORDER BY s.created_at ASC
+	`)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to list sections"})
+	}
+	defer rows.Close()
+
+	var sections []APISection
+	for rows.Next() {
+		var s APISection
+		rows.Scan(&s.ID, &s.Name, &s.CreatedAt, &s.CardCount)
+		sections = append(sections, s)
+	}
+	return c.JSON(fiber.Map{"success": true, "sections": sections})
+}
+
+func AddSection(c *fiber.Ctx) error {
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
+	}
+
+	id := strings.ToLower(strings.ReplaceAll(body.Name, " ", "_")) + "_" + uuid.New().String()[:4]
+	_, err := database.Router.GetGlobalManagerDB().Exec(
+		"INSERT INTO api_sections (id, name, created_at) VALUES (?, ?, ?)",
+		id, body.Name, time.Now().Unix(),
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create section"})
+	}
+	return c.JSON(fiber.Map{"success": true, "id": id})
+}
+
+// ─── CARDS ───────────────────────────────────────────────────────────────────
+
+func ListCards(c *fiber.Ctx) error {
+	sectionID := c.Query("section_id")
+	query := "SELECT id, section_id, name, icon, description, is_deleted, created_at FROM api_cards WHERE is_deleted = 0"
+	var args []interface{}
+
+	if sectionID != "" {
+		query += " AND section_id = ?"
+		args = append(args, sectionID)
+	}
+
+	rows, err := database.Router.GetGlobalManagerDB().Query(query, args...)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to list cards"})
+	}
+	defer rows.Close()
+
+	var cards []APICard
+	for rows.Next() {
+		var cd APICard
+		var isDel int
+		rows.Scan(&cd.ID, &cd.SectionID, &cd.Name, &cd.Icon, &cd.Description, &isDel, &cd.CreatedAt)
+		cd.IsDeleted = isDel == 1
+		
+		// Get key count
+		database.Router.GetGlobalManagerDB().QueryRow("SELECT COUNT(*) FROM managed_api_keys WHERE card_id = ? AND is_deleted = 0", cd.ID).Scan(&cd.KeyCount)
+		
+		cards = append(cards, cd)
+	}
+	return c.JSON(fiber.Map{"success": true, "cards": cards})
+}
+
+func AddCard(c *fiber.Ctx) error {
+	var body struct {
+		SectionID   string `json:"section_id"`
+		Name        string `json:"name"`
+		Icon        string `json:"icon"`
+		Description string `json:"description"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
+	}
+
+	id := uuid.New().String()
+	_, err := database.Router.GetGlobalManagerDB().Exec(
+		"INSERT INTO api_cards (id, section_id, name, icon, description, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		id, body.SectionID, body.Name, body.Icon, body.Description, time.Now().Unix(),
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create card"})
+	}
+	return c.JSON(fiber.Map{"success": true, "id": id})
+}
+
+// ─── KEYS ────────────────────────────────────────────────────────────────────
+
+func ListKeys(c *fiber.Ctx) error {
+	cardID := c.Query("card_id")
+	if cardID == "" {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Card ID required"})
+	}
+
+	rows, err := database.Router.GetGlobalManagerDB().Query(`
+		SELECT id, card_id, label, status, encrypted_value, api_url, use_url, is_deleted, created_at, updated_at 
+		FROM managed_api_keys 
+		WHERE card_id = ? AND is_deleted = 0
+	`, cardID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to list keys"})
+	}
+	defer rows.Close()
+
+	var keys []APIKeyResponse
+	for rows.Next() {
+		var k APIKeyResponse
+		var encrypted string
+		var useURL, isDel int
+		rows.Scan(&k.ID, &k.CardID, &k.Label, &k.Status, &encrypted, &k.APIURL, &useURL, &isDel, &k.CreatedAt, &k.UpdatedAt)
+		k.UseURL = useURL == 1
+		k.IsDeleted = isDel == 1
+
+		// Mask Key
+		decrypted, _ := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
+		if len(decrypted) > 8 {
+			k.MaskedValue = decrypted[:4] + "..." + decrypted[len(decrypted)-4:]
+		} else {
+			k.MaskedValue = "***"
+		}
+
+		keys = append(keys, k)
+	}
+	return c.JSON(fiber.Map{"success": true, "keys": keys})
+}
+
+func AddKey(c *fiber.Ctx) error {
+	var body struct {
+		CardID   string `json:"card_id"`
+		Label    string `json:"label"`
+		Value    string `json:"value"`
+		APIURL   string `json:"api_url"`
+		UseURL   bool   `json:"use_url"`
+		Provider string `json:"provider"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
+	}
+
+	encrypted, err := security.Encrypt(body.Value, config.AppConfig.BandhanNovaMasterKey)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Encryption failed"})
+	}
+
+	id := uuid.New().String()
+	now := time.Now().Unix()
+	useURLInt := 0
+	if body.UseURL { useURLInt = 1 }
+
+	_, err = database.Router.GetGlobalManagerDB().Exec(`
+		INSERT INTO managed_api_keys (id, card_id, provider, encrypted_value, label, api_url, use_url, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, body.CardID, body.Provider, encrypted, body.Label, body.APIURL, useURLInt, now, now)
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to save key"})
+	}
+	return c.JSON(fiber.Map{"success": true, "id": id})
+}
+
+// ─── DELETION & SOFT DELETE ──────────────────────────────────────────────────
+
+func DeleteAPIItem(c *fiber.Ctx) error {
+	itemType := c.Params("type") // section, card, key
+	id := c.Params("id")
+	ip, _ := c.Locals("admin_ip").(string)
+
+	var err error
+	switch itemType {
+	case "card":
+		_, err = database.Router.GetGlobalManagerDB().Exec("UPDATE api_cards SET is_deleted = 1, section_id = 'unused' WHERE id = ?", id)
+	case "key":
+		_, err = database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET is_deleted = 1 WHERE id = ?", id)
+	default:
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid item type"})
+	}
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to move to unused"})
+	}
+
+	admin.LogAudit("SOFT_DELETE_API", itemType, ip, fmt.Sprintf("Moved %s %s to Unused", itemType, id))
+	return c.JSON(fiber.Map{"success": true})
+}
+
+func ListUnused(c *fiber.Ctx) error {
+	// List deleted cards
+	cRows, _ := database.Router.GetGlobalManagerDB().Query("SELECT id, name, icon FROM api_cards WHERE is_deleted = 1")
+	defer cRows.Close()
+	var cards []fiber.Map
+	for cRows.Next() {
+		var id, name, icon string
+		cRows.Scan(&id, &name, &icon)
+		cards = append(cards, fiber.Map{"id": id, "name": name, "icon": icon, "type": "card"})
+	}
+
+	// List deleted keys
+	kRows, _ := database.Router.GetGlobalManagerDB().Query("SELECT id, label FROM managed_api_keys WHERE is_deleted = 1")
+	defer kRows.Close()
+	var keys []fiber.Map
+	for kRows.Next() {
+		var id, label string
+		kRows.Scan(&id, &label)
+		keys = append(keys, fiber.Map{"id": id, "name": label, "type": "key"})
+	}
+
+	return c.JSON(fiber.Map{"success": true, "items": append(cards, keys...)})
+}
+
+func PermanentDelete(c *fiber.Ctx) error {
+	itemType := c.Params("type")
+	id := c.Params("id")
+	ip, _ := c.Locals("admin_ip").(string)
+
+	var err error
+	if itemType == "card" {
+		_, err = database.Router.GetGlobalManagerDB().Exec("DELETE FROM api_cards WHERE id = ?", id)
+	} else if itemType == "key" {
+		_, err = database.Router.GetGlobalManagerDB().Exec("DELETE FROM managed_api_keys WHERE id = ?", id)
+	}
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Delete failed"})
+	}
+
+	admin.LogAudit("PERM_DELETE_API", itemType, ip, fmt.Sprintf("Permanently deleted %s %s", itemType, id))
+	return c.JSON(fiber.Map{"success": true})
+}

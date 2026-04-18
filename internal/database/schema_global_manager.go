@@ -54,14 +54,36 @@ CREATE TABLE IF NOT EXISTS oauth_authorizations (
     FOREIGN KEY (client_id) REFERENCES oauth_clients(client_id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS api_sections (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS api_cards (
+    id TEXT PRIMARY KEY,
+    section_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    icon TEXT,
+    description TEXT,
+    is_deleted INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (section_id) REFERENCES api_sections(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS managed_api_keys (
     id TEXT PRIMARY KEY,
-    provider TEXT NOT NULL,
+    card_id TEXT, -- Linked to api_cards
+    provider TEXT NOT NULL, -- Keep for legacy/routing
     encrypted_value TEXT NOT NULL,
     label TEXT,
+    api_url TEXT, -- Custom endpoint if use_url is true
+    use_url INTEGER DEFAULT 0, -- 0 for false, 1 for true
     status TEXT DEFAULT 'active',
+    is_deleted INTEGER DEFAULT 0,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (card_id) REFERENCES api_cards(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS admin_audit_log (
@@ -83,13 +105,15 @@ func InitGlobalManagerSchema(db *sql.DB) error {
 
 	// ─── AUTO-MIGRATIONS FOR EXISTING TABLES ────────────────────────────────
 	
-	// Add product_id to managed_databases if missing
-	_, _ = db.Exec("ALTER TABLE managed_databases ADD COLUMN product_id TEXT")
-	
-	// Add new columns to managed_products if missing
-	_, _ = db.Exec("ALTER TABLE managed_products ADD COLUMN app_type TEXT DEFAULT 'website'")
-	_, _ = db.Exec("ALTER TABLE managed_products ADD COLUMN app_url TEXT")
-	_, _ = db.Exec("ALTER TABLE managed_products ADD COLUMN url TEXT") // Keep for safety if already existed
+	// ─── API MANAGEMENT MIGRATIONS ───────────────────────────────────────
+	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN card_id TEXT")
+	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN api_url TEXT")
+	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN use_url INTEGER DEFAULT 0")
+	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN is_deleted INTEGER DEFAULT 0")
+
+	// Ensure "Unused APIs" section exists
+	unusedID := "unused"
+	_, _ = db.Exec("INSERT OR IGNORE INTO api_sections (id, name, created_at) VALUES (?, ?, ?)", unusedID, "Unused APIs", 0)
 
 	return nil
 }

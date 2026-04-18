@@ -6,6 +6,7 @@ import (
 	"github.com/bandhannova/api-hunter/internal/middleware"
 	"github.com/bandhannova/api-hunter/internal/modules/admin"
 	"github.com/bandhannova/api-hunter/internal/modules/ai"
+	"github.com/bandhannova/api-hunter/internal/modules/api_mgmt"
 	"github.com/bandhannova/api-hunter/internal/modules/auth"
 	"github.com/bandhannova/api-hunter/internal/modules/auth_provider"
 	"github.com/bandhannova/api-hunter/internal/modules/database_mgmt"
@@ -43,7 +44,18 @@ func SetupRoutes(app *fiber.App) {
 	adminAuth.Post("/reload", admin.ReloadKeys)
 	adminAuth.Get("/audit", admin.GetAuditLog)
 	
-	// Admin Key Management
+	// Admin Key Management (New Hierarchical System)
+	adminAuth.Get("/api/sections", api_mgmt.ListSections)
+	adminAuth.Post("/api/sections", api_mgmt.AddSection)
+	adminAuth.Get("/api/cards", api_mgmt.ListCards)
+	adminAuth.Post("/api/cards", api_mgmt.AddCard)
+	adminAuth.Get("/api/keys", api_mgmt.ListKeys)
+	adminAuth.Post("/api/keys", api_mgmt.AddKey)
+	adminAuth.Post("/api/items/:type/:id/delete", api_mgmt.DeleteAPIItem)
+	adminAuth.Get("/api/unused", api_mgmt.ListUnused)
+	adminAuth.Delete("/api/unused/:type/:id", api_mgmt.PermanentDelete)
+
+	// Admin Key Management (Legacy Support)
 	adminAuth.Get("/keys", admin.ListManagedKeys)
 	adminAuth.Post("/keys", admin.AddManagedKey)
 	adminAuth.Delete("/keys/:id", admin.DeleteManagedKey)

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS managed_products (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT UNIQUE NOT NULL,
+    url TEXT,
     description TEXT,
     icon TEXT,
     status TEXT DEFAULT 'active',

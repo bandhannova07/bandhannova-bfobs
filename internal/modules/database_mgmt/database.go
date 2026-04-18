@@ -33,6 +33,7 @@ type ProductResponse struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Slug        string `json:"slug"`
+	URL         string `json:"url"`
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
 	Status      string `json:"status"`
@@ -391,7 +392,7 @@ func ListProducts(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Global DB not connected"})
 	}
 
-	rows, err := database.Router.GetGlobalManagerDB().Query("SELECT id, name, slug, description, icon, status, created_at, updated_at FROM managed_products ORDER BY created_at DESC")
+	rows, err := database.Router.GetGlobalManagerDB().Query("SELECT id, name, slug, url, description, icon, status, created_at, updated_at FROM managed_products ORDER BY created_at DESC")
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to query products"})
 	}
@@ -400,7 +401,10 @@ func ListProducts(c *fiber.Ctx) error {
 	var products []ProductResponse
 	for rows.Next() {
 		var p ProductResponse
-		if err := rows.Scan(&p.ID, &p.Name, &p.Slug, &p.Description, &p.Icon, &p.Status, &p.CreatedAt, &p.UpdatedAt); err == nil {
+		var url, icon sql.NullString
+		if err := rows.Scan(&p.ID, &p.Name, &p.Slug, &url, &p.Description, &icon, &p.Status, &p.CreatedAt, &p.UpdatedAt); err == nil {
+			if url.Valid { p.URL = url.String }
+			if icon.Valid { p.Icon = icon.String }
 			products = append(products, p)
 		}
 	}
@@ -410,6 +414,7 @@ func ListProducts(c *fiber.Ctx) error {
 
 type AddProductRequest struct {
 	Name        string `json:"name"`
+	URL         string `json:"url"`
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
 }
@@ -430,8 +435,8 @@ func AddProduct(c *fiber.Ctx) error {
 	now := time.Now().Unix()
 
 	_, err := database.Router.GetGlobalManagerDB().Exec(
-		"INSERT INTO managed_products (id, name, slug, description, icon, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)",
-		id, req.Name, slug, req.Description, req.Icon, now, now,
+		"INSERT INTO managed_products (id, name, slug, url, description, icon, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+		id, req.Name, slug, req.URL, req.Description, req.Icon, now, now,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to save product"})

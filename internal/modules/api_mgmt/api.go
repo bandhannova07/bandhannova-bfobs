@@ -267,24 +267,30 @@ func ListUnused(c *fiber.Ctx) error {
 	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
 		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
 	}
-	// List deleted cards
-	cRows, _ := database.Router.GetGlobalManagerDB().Query("SELECT id, name, icon FROM api_cards WHERE is_deleted = 1")
-	defer cRows.Close()
+	
 	var cards []fiber.Map
-	for cRows.Next() {
-		var id, name, icon string
-		cRows.Scan(&id, &name, &icon)
-		cards = append(cards, fiber.Map{"id": id, "name": name, "icon": icon, "type": "card"})
+	var keys []fiber.Map
+
+	// List deleted cards
+	cRows, err := database.Router.GetGlobalManagerDB().Query("SELECT id, name, icon FROM api_cards WHERE is_deleted = 1")
+	if err == nil && cRows != nil {
+		defer cRows.Close()
+		for cRows.Next() {
+			var id, name, icon string
+			cRows.Scan(&id, &name, &icon)
+			cards = append(cards, fiber.Map{"id": id, "name": name, "icon": icon, "type": "card"})
+		}
 	}
 
 	// List deleted keys
-	kRows, _ := database.Router.GetGlobalManagerDB().Query("SELECT id, label FROM managed_api_keys WHERE is_deleted = 1")
-	defer kRows.Close()
-	var keys []fiber.Map
-	for kRows.Next() {
-		var id, label string
-		kRows.Scan(&id, &label)
-		keys = append(keys, fiber.Map{"id": id, "name": label, "type": "key"})
+	kRows, err := database.Router.GetGlobalManagerDB().Query("SELECT id, label FROM managed_api_keys WHERE is_deleted = 1")
+	if err == nil && kRows != nil {
+		defer kRows.Close()
+		for kRows.Next() {
+			var id, label string
+			kRows.Scan(&id, &label)
+			keys = append(keys, fiber.Map{"id": id, "name": label, "type": "key"})
+		}
 	}
 
 	return c.JSON(fiber.Map{"success": true, "items": append(cards, keys...)})

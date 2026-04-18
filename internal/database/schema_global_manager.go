@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 )
 
 // GlobalManagerSchema defines tables for system-wide configuration

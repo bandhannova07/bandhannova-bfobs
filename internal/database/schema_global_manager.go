@@ -106,6 +106,33 @@ func InitGlobalManagerSchema(db *sql.DB) error {
 	// ─── AUTO-MIGRATIONS FOR EXISTING TABLES ────────────────────────────────
 	
 	// ─── API MANAGEMENT MIGRATIONS ───────────────────────────────────────
+	log.Println("🛠️  Running API Management migrations...")
+	
+	// Create tables explicitly first to ensure they exist for the migrations below
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS api_sections (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			created_at INTEGER NOT NULL
+		);
+	`)
+	if err != nil { log.Printf("⚠️  Error creating api_sections: %v", err) }
+
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS api_cards (
+			id TEXT PRIMARY KEY,
+			section_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			icon TEXT,
+			description TEXT,
+			is_deleted INTEGER DEFAULT 0,
+			created_at INTEGER NOT NULL,
+			FOREIGN KEY (section_id) REFERENCES api_sections(id) ON DELETE CASCADE
+		);
+	`)
+	if err != nil { log.Printf("⚠️  Error creating api_cards: %v", err) }
+
+	// Add columns to existing managed_api_keys table
 	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN card_id TEXT")
 	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN api_url TEXT")
 	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN use_url INTEGER DEFAULT 0")
@@ -113,7 +140,11 @@ func InitGlobalManagerSchema(db *sql.DB) error {
 
 	// Ensure "Unused APIs" section exists
 	unusedID := "unused"
-	_, _ = db.Exec("INSERT OR IGNORE INTO api_sections (id, name, created_at) VALUES (?, ?, ?)", unusedID, "Unused APIs", 0)
+	_, err = db.Exec("INSERT OR IGNORE INTO api_sections (id, name, created_at) VALUES (?, ?, ?)", unusedID, "Unused APIs", 0)
+	if err != nil {
+		log.Printf("⚠️  Failed to seed Unused APIs section: %v", err)
+	}
 
+	log.Println("✅ API Management migrations completed")
 	return nil
 }

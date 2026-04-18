@@ -48,6 +48,9 @@ type APIKeyResponse struct {
 // ─── SECTIONS ────────────────────────────────────────────────────────────────
 
 func ListSections(c *fiber.Ctx) error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
+	}
 	rows, err := database.Router.GetGlobalManagerDB().Query(`
 		SELECT s.id, s.name, s.created_at, COUNT(c.id) as card_count
 		FROM api_sections s
@@ -70,6 +73,9 @@ func ListSections(c *fiber.Ctx) error {
 }
 
 func AddSection(c *fiber.Ctx) error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
+	}
 	var body struct {
 		Name string `json:"name"`
 	}
@@ -91,6 +97,9 @@ func AddSection(c *fiber.Ctx) error {
 // ─── CARDS ───────────────────────────────────────────────────────────────────
 
 func ListCards(c *fiber.Ctx) error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
+	}
 	sectionID := c.Query("section_id")
 	query := "SELECT id, section_id, name, icon, description, is_deleted, created_at FROM api_cards WHERE is_deleted = 0"
 	var args []interface{}
@@ -122,6 +131,9 @@ func ListCards(c *fiber.Ctx) error {
 }
 
 func AddCard(c *fiber.Ctx) error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
+	}
 	var body struct {
 		SectionID   string `json:"section_id"`
 		Name        string `json:"name"`
@@ -146,6 +158,9 @@ func AddCard(c *fiber.Ctx) error {
 // ─── KEYS ────────────────────────────────────────────────────────────────────
 
 func ListKeys(c *fiber.Ctx) error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
+	}
 	cardID := c.Query("card_id")
 	if cardID == "" {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Card ID required"})
@@ -184,6 +199,9 @@ func ListKeys(c *fiber.Ctx) error {
 }
 
 func AddKey(c *fiber.Ctx) error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
+	}
 	var body struct {
 		CardID   string `json:"card_id"`
 		Label    string `json:"label"`
@@ -220,6 +238,9 @@ func AddKey(c *fiber.Ctx) error {
 // ─── DELETION & SOFT DELETE ──────────────────────────────────────────────────
 
 func DeleteAPIItem(c *fiber.Ctx) error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
+	}
 	itemType := c.Params("type") // section, card, key
 	id := c.Params("id")
 	ip, _ := c.Locals("admin_ip").(string)
@@ -243,6 +264,9 @@ func DeleteAPIItem(c *fiber.Ctx) error {
 }
 
 func ListUnused(c *fiber.Ctx) error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
+	}
 	// List deleted cards
 	cRows, _ := database.Router.GetGlobalManagerDB().Query("SELECT id, name, icon FROM api_cards WHERE is_deleted = 1")
 	defer cRows.Close()
@@ -267,6 +291,9 @@ func ListUnused(c *fiber.Ctx) error {
 }
 
 func PermanentDelete(c *fiber.Ctx) error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
+	}
 	itemType := c.Params("type")
 	id := c.Params("id")
 	ip, _ := c.Locals("admin_ip").(string)

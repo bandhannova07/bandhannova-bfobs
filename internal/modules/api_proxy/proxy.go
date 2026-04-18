@@ -2,7 +2,9 @@ package api_proxy
 
 import (
 	"bytes"
+	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -13,98 +15,106 @@ import (
 	"github.com/google/uuid"
 )
 
-// ProxyHandler handles the API request redirection with key rotation
+var userAgents = []string{
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
+}
+
 func ProxyHandler(c *fiber.Ctx) error {
 	provider := c.Params("provider")
 	if provider == "" {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Provider is required"})
 	}
 
-	// 1. Fetch Least Recently Used key for this provider
-	var keyID, cardID, encrypted, apiURL string
-	var useURL int
-	query := `
-		SELECT k.id, k.card_id, k.encrypted_value, k.api_url, k.use_url
-		FROM managed_api_keys k
-		JOIN api_cards c ON k.card_id = c.id
-		WHERE (c.name = ? OR k.provider = ?) AND k.status = 'active' AND k.is_deleted = 0
-		ORDER BY k.updated_at ASC
-		LIMIT 1
-	`
-	err := database.Router.GetGlobalManagerDB().QueryRow(query, provider, provider).Scan(
-		&keyID, &cardID, &encrypted, &apiURL, &useURL,
-	)
+	// Retry logic (Try up to 3 different keys if one fails)
+	for attempt := 0; attempt < 3; attempt++ {
+		// 1. Fetch Least Recently Used key for this provider
+		var keyID, cardID, encrypted, cardEndpoint, platformType string
+		query := `
+			SELECT k.id, k.card_id, k.encrypted_value, c.endpoint_url, c.platform_type
+			FROM managed_api_keys k
+			JOIN api_cards c ON k.card_id = c.id
+			WHERE (c.name = ? OR k.provider = ?) AND k.status = 'active' AND k.is_deleted = 0
+			ORDER BY k.updated_at ASC
+			LIMIT 1
+		`
+		err := database.Router.GetGlobalManagerDB().QueryRow(query, provider, provider).Scan(
+			&keyID, &cardID, &encrypted, &cardEndpoint, &platformType,
+		)
 
-	if err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": true, "message": "No active API keys for: " + provider})
-	}
-
-	// 2. Decrypt the API Key
-	apiKey, err := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Security layer error"})
-	}
-
-	// 3. Construct Target URL
-	if useURL == 0 || apiURL == "" {
-		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Target endpoint not configured"})
-	}
-
-	fullURL := apiURL + c.Params("*")
-	queryString := string(c.Request().URI().QueryString())
-	if queryString != "" {
-		fullURL += "?" + queryString
-	}
-
-	// 4. Create HTTP Request
-	req, err := http.NewRequest(c.Method(), fullURL, bytes.NewReader(c.Body()))
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to initialize request"})
-	}
-
-	// Copy headers from original request
-	c.Request().Header.VisitAll(func(key, value []byte) {
-		k := string(key)
-		if k != "Host" && k != "Authorization" && k != "X-Bandhannova-Key" {
-			req.Header.Set(k, string(value))
+		if err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": true, "message": "No healthy API keys available"})
 		}
-	})
 
-	// Inject Authentication
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("api-key", apiKey)
+		// 2. Decrypt the API Key
+		apiKey, _ := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
 
-	// 5. Execute with Timeout
-	client := &http.Client{Timeout: 60 * time.Second}
-	start := time.Now()
-	resp, err := client.Do(req)
-	latency := time.Since(start).Milliseconds()
-
-	if err != nil {
-		logUsage(keyID, cardID, c.Method(), fullURL, 502, int(latency), c.IP())
-		return c.Status(502).JSON(fiber.Map{"error": true, "message": "Upstream timeout or error"})
-	}
-	defer resp.Body.Close()
-
-	// 6. Update Usage Timestamp (Rotation Logic)
-	_, _ = database.Router.GetGlobalManagerDB().Exec(
-		"UPDATE managed_api_keys SET updated_at = ? WHERE id = ?",
-		time.Now().Unix(), keyID,
-	)
-
-	// 7. Record Metrics
-	logUsage(keyID, cardID, c.Method(), fullURL, resp.StatusCode, int(latency), c.IP())
-
-	// 8. Stream Response back
-	c.Status(resp.StatusCode)
-	for k, v := range resp.Header {
-		if len(v) > 0 {
-			c.Set(k, v[0])
+		// 3. Construct Target URL
+		fullURL := cardEndpoint + c.Params("*")
+		queryString := string(c.Request().URI().QueryString())
+		if queryString != "" {
+			fullURL += "?" + queryString
 		}
+
+		// 4. Create HTTP Request
+		req, _ := http.NewRequest(c.Method(), fullURL, bytes.NewReader(c.Body()))
+
+		// Copy headers + Randomize to avoid IP/Bot fingerprinting
+		c.Request().Header.VisitAll(func(key, value []byte) {
+			k := string(key)
+			if k != "Host" && k != "Authorization" && k != "User-Agent" {
+				req.Header.Set(k, string(value))
+			}
+		})
+		
+		// Anonymization Layer
+		req.Header.Set("User-Agent", userAgents[rand.Intn(len(userAgents))])
+		req.Header.Set("X-Forwarded-For", fmt.Sprintf("%d.%d.%d.%d", rand.Intn(255), rand.Intn(255), rand.Intn(255), rand.Intn(255)))
+		
+		// Handle different platform types
+		switch platformType {
+		case "anthropic":
+			req.Header.Set("x-api-key", apiKey)
+			req.Header.Set("anthropic-version", "2023-06-01")
+		default: // OpenAI Compatible
+			req.Header.Set("Authorization", "Bearer "+apiKey)
+		}
+
+		// 5. Execute with Timeout
+		client := &http.Client{Timeout: 45 * time.Second}
+		start := time.Now()
+		resp, err := client.Do(req)
+		latency := time.Since(start).Milliseconds()
+
+		if err != nil {
+			// Mark key for cooling down if unreachable
+			database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix()+300, keyID)
+			continue
+		}
+		defer resp.Body.Close()
+
+		// 6. Handle Failures (Rate limits or Invalid keys)
+		if resp.StatusCode == 429 || resp.StatusCode == 401 {
+			// Mark key for cooling down (Push to far future in LRU)
+			database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix()+1800, keyID)
+			continue
+		}
+
+		// 7. Success - Record Metrics & Return Response
+		database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix(), keyID)
+		logUsage(keyID, cardID, c.Method(), fullURL, resp.StatusCode, int(latency), c.IP())
+
+		c.Status(resp.StatusCode)
+		for k, v := range resp.Header {
+			if len(v) > 0 { c.Set(k, v[0]) }
+		}
+		body, _ := io.ReadAll(resp.Body)
+		return c.Send(body)
 	}
-	
-	body, _ := io.ReadAll(resp.Body)
-	return c.Send(body)
+
+	return c.Status(502).JSON(fiber.Map{"error": true, "message": "All available keys failed or rate-limited"})
 }
 
 func logUsage(keyID, cardID, method, path string, status, latency int, ip string) {

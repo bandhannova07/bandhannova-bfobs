@@ -100,7 +100,7 @@ func ListCards(c *fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
 	}
 	sectionID := c.Query("section_id")
-	query := "SELECT id, section_id, name, icon, description, is_deleted, created_at FROM api_cards WHERE is_deleted = 0"
+	query := "SELECT id, section_id, name, icon, description, endpoint_url, platform_type, is_deleted, created_at FROM api_cards WHERE is_deleted = 0"
 	var args []interface{}
 
 	if sectionID != "" {
@@ -118,7 +118,7 @@ func ListCards(c *fiber.Ctx) error {
 	for rows.Next() {
 		var cd APICard
 		var isDel int
-		rows.Scan(&cd.ID, &cd.SectionID, &cd.Name, &cd.Icon, &cd.Description, &isDel, &cd.CreatedAt)
+		rows.Scan(&cd.ID, &cd.SectionID, &cd.Name, &cd.Icon, &cd.Description, &cd.EndpointURL, &cd.PlatformType, &isDel, &cd.CreatedAt)
 		cd.IsDeleted = isDel == 1
 		
 		// Get key count
@@ -134,10 +134,12 @@ func AddCard(c *fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
 	}
 	var body struct {
-		SectionID   string `json:"section_id"`
-		Name        string `json:"name"`
-		Icon        string `json:"icon"`
-		Description string `json:"description"`
+		SectionID    string `json:"section_id"`
+		Name         string `json:"name"`
+		Icon         string `json:"icon"`
+		Description  string `json:"description"`
+		EndpointURL  string `json:"endpoint_url"`
+		PlatformType string `json:"platform_type"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
@@ -145,8 +147,8 @@ func AddCard(c *fiber.Ctx) error {
 
 	id := uuid.New().String()
 	_, err := database.Router.GetGlobalManagerDB().Exec(
-		"INSERT INTO api_cards (id, section_id, name, icon, description, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-		id, body.SectionID, body.Name, body.Icon, body.Description, time.Now().Unix(),
+		"INSERT INTO api_cards (id, section_id, name, icon, description, endpoint_url, platform_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		id, body.SectionID, body.Name, body.Icon, body.Description, body.EndpointURL, body.PlatformType, time.Now().Unix(),
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create card"})

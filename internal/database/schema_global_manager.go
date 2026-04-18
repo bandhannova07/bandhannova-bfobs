@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS api_cards (
     name TEXT NOT NULL,
     icon TEXT,
     description TEXT,
+    endpoint_url TEXT,
+    platform_type TEXT DEFAULT 'openai_compatible',
     is_deleted INTEGER DEFAULT 0,
     created_at INTEGER NOT NULL,
     FOREIGN KEY (section_id) REFERENCES api_sections(id) ON DELETE CASCADE

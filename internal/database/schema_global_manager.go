@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS managed_products (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT UNIQUE NOT NULL,
-    url TEXT,
+    app_type TEXT DEFAULT 'website',
+    app_url TEXT,
     description TEXT,
     icon TEXT,
     status TEXT DEFAULT 'active',
@@ -65,8 +66,10 @@ func InitGlobalManagerSchema(db *sql.DB) error {
 	// Add product_id to managed_databases if missing
 	_, _ = db.Exec("ALTER TABLE managed_databases ADD COLUMN product_id TEXT")
 	
-	// Add url to managed_products if missing
-	_, _ = db.Exec("ALTER TABLE managed_products ADD COLUMN url TEXT")
+	// Add new columns to managed_products if missing
+	_, _ = db.Exec("ALTER TABLE managed_products ADD COLUMN app_type TEXT DEFAULT 'website'")
+	_, _ = db.Exec("ALTER TABLE managed_products ADD COLUMN app_url TEXT")
+	_, _ = db.Exec("ALTER TABLE managed_products ADD COLUMN url TEXT") // Keep for safety if already existed
 
 	return nil
 }

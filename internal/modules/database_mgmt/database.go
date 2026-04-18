@@ -33,7 +33,8 @@ type ProductResponse struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Slug        string `json:"slug"`
-	URL         string `json:"url"`
+	AppType     string `json:"app_type"`
+	AppURL      string `json:"app_url"`
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
 	Status      string `json:"status"`
@@ -392,7 +393,7 @@ func ListProducts(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Global DB not connected"})
 	}
 
-	rows, err := database.Router.GetGlobalManagerDB().Query("SELECT id, name, slug, url, description, icon, status, created_at, updated_at FROM managed_products ORDER BY created_at DESC")
+	rows, err := database.Router.GetGlobalManagerDB().Query("SELECT id, name, slug, app_type, app_url, description, icon, status, created_at, updated_at FROM managed_products ORDER BY created_at DESC")
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to query products"})
 	}
@@ -401,9 +402,10 @@ func ListProducts(c *fiber.Ctx) error {
 	var products []ProductResponse
 	for rows.Next() {
 		var p ProductResponse
-		var url, icon sql.NullString
-		if err := rows.Scan(&p.ID, &p.Name, &p.Slug, &url, &p.Description, &icon, &p.Status, &p.CreatedAt, &p.UpdatedAt); err == nil {
-			if url.Valid { p.URL = url.String }
+		var appType, appURL, icon sql.NullString
+		if err := rows.Scan(&p.ID, &p.Name, &p.Slug, &appType, &appURL, &p.Description, &icon, &p.Status, &p.CreatedAt, &p.UpdatedAt); err == nil {
+			if appType.Valid { p.AppType = appType.String }
+			if appURL.Valid { p.AppURL = appURL.String }
 			if icon.Valid { p.Icon = icon.String }
 			products = append(products, p)
 		}
@@ -414,7 +416,8 @@ func ListProducts(c *fiber.Ctx) error {
 
 type AddProductRequest struct {
 	Name        string `json:"name"`
-	URL         string `json:"url"`
+	AppType     string `json:"app_type"`
+	AppURL      string `json:"app_url"`
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
 }
@@ -435,8 +438,8 @@ func AddProduct(c *fiber.Ctx) error {
 	now := time.Now().Unix()
 
 	_, err := database.Router.GetGlobalManagerDB().Exec(
-		"INSERT INTO managed_products (id, name, slug, url, description, icon, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)",
-		id, req.Name, slug, req.URL, req.Description, req.Icon, now, now,
+		"INSERT INTO managed_products (id, name, slug, app_type, app_url, description, icon, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+		id, req.Name, slug, req.AppType, req.AppURL, req.Description, req.Icon, now, now,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to save product"})
@@ -445,6 +448,104 @@ func AddProduct(c *fiber.Ctx) error {
 	admin.LogAudit("ADD_PRODUCT", req.Name, ip, fmt.Sprintf("Added product: %s", req.Name))
 
 	return c.JSON(fiber.Map{"success": true, "message": "Product added successfully", "id": id})
+}
+
+func UpdateProduct(c *fiber.Ctx) error {
+	id := c.Params("id")
+	ip, _ := c.Locals("admin_ip").(string)
+	var req AddProductRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid payload"})
+	}
+
+	now := time.Now().Unix()
+	_, err := database.Router.GetGlobalManagerDB().Exec(
+		"UPDATE managed_products SET name = ?, app_type = ?, app_url = ?, description = ?, icon = ?, updated_at = ? WHERE id = ?",
+		req.Name, req.AppType, req.AppURL, req.Description, req.Icon, now, id,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to update product"})
+	}
+
+	admin.LogAudit("UPDATE_PRODUCT", req.Name, ip, fmt.Sprintf("Updated product: %s", req.Name))
+	return c.JSON(fiber.Map{"success": true, "message": "Product updated successfully"})
+}
+
+type DeleteProductRequest struct {
+	MasterKey    string `json:"master_key"`
+	Confirmation string `json:"confirmation"`
+}
+
+func DeleteProduct(c *fiber.Ctx) error {
+	id := c.Params("id")
+	ip, _ := c.Locals("admin_ip").(string)
+	var req DeleteProductRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid payload"})
+	}
+
+	// 1. Verify Master Key
+	if req.MasterKey != config.AppConfig.BandhanNovaMasterKey {
+		return c.Status(401).JSON(fiber.Map{"error": true, "message": "Invalid Master Key"})
+	}
+
+	// 2. Get Product Info
+	var pName string
+	err := database.Router.GetGlobalManagerDB().QueryRow("SELECT name FROM managed_products WHERE id = ?", id).Scan(&pName)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Product not found"})
+	}
+
+	// 3. Verify Phrase
+	expectedPhrase := fmt.Sprintf("I am Bandhan, to the best of my knowledge, I want to delete this product, named %s.", pName)
+	if req.Confirmation != expectedPhrase {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Confirmation phrase mismatch"})
+	}
+
+	// 4. Find linked shards
+	rows, err := database.Router.GetGlobalManagerDB().Query("SELECT slug, name FROM managed_databases WHERE product_id = ?", id)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var slug, shardName string
+			if err := rows.Scan(&slug, &shardName); err == nil {
+				// WIPE SHARD DATA
+				targetDB := database.Router.GetManagedDBBySlug(slug)
+				if targetDB != nil {
+					// Drop all tables
+					tRows, _ := targetDB.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+					if tRows != nil {
+						var tables []string
+						for tRows.Next() {
+							var tName string
+							tRows.Scan(&tName)
+							tables = append(tables, tName)
+						}
+						tRows.Close()
+						for _, tName := range tables {
+							targetDB.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tName))
+						}
+						targetDB.Exec("VACUUM")
+					}
+				}
+				// Set product_id to NULL (Moves to Unused Shards)
+				database.Router.GetGlobalManagerDB().Exec("UPDATE managed_databases SET product_id = NULL WHERE slug = ?", slug)
+			}
+		}
+	}
+
+	// 5. Delete Product
+	_, err = database.Router.GetGlobalManagerDB().Exec("DELETE FROM managed_products WHERE id = ?", id)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to delete product record"})
+	}
+
+	admin.LogAudit("DELETE_PRODUCT", pName, ip, fmt.Sprintf("DELETED PRODUCT AND WIPED SHARDS: %s", pName))
+	
+	// Refresh Registry
+	go ReloadManagedDatabases()
+
+	return c.JSON(fiber.Map{"success": true, "message": "Product deleted and shards wiped successfully"})
 }
 
 // GetPulseHealth returns real-time health data for all shards

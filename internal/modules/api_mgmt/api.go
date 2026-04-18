@@ -28,7 +28,9 @@ type APICard struct {
 	Icon         string `json:"icon"`
 	EndpointURL  string `json:"endpoint_url"`
 	PlatformType string `json:"platform_type"`
+	RateLimit    int    `json:"rate_limit"`
 	KeyCount     int    `json:"key_count"`
+	TotalReq     int    `json:"total_req"`
 	IsDeleted    bool   `json:"is_deleted"`
 	CreatedAt    int64  `json:"created_at"`
 }
@@ -102,7 +104,7 @@ func ListCards(c *fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
 	}
 	sectionID := c.Query("section_id")
-	query := "SELECT id, section_id, name, icon, endpoint_url, platform_type, is_deleted, created_at FROM api_cards WHERE is_deleted = 0"
+	query := "SELECT id, section_id, name, icon, endpoint_url, platform_type, rate_limit, is_deleted, created_at FROM api_cards WHERE is_deleted = 0"
 	var args []interface{}
 
 	if sectionID != "" {
@@ -127,6 +129,7 @@ func ListCards(c *fiber.Ctx) error {
 			&cd.Icon, 
 			&cd.EndpointURL, 
 			&cd.PlatformType, 
+			&cd.RateLimit,
 			&isDel, 
 			&cd.CreatedAt,
 		)
@@ -139,6 +142,9 @@ func ListCards(c *fiber.Ctx) error {
 		// Get key count
 		_ = database.Router.GetGlobalManagerDB().QueryRow("SELECT COUNT(*) FROM managed_api_keys WHERE card_id = ? AND is_deleted = 0", cd.ID).Scan(&cd.KeyCount)
 		
+		// Get total usage from logs
+		_ = database.Router.GetGlobalManagerDB().QueryRow("SELECT COUNT(*) FROM api_usage_logs WHERE card_id = ?", cd.ID).Scan(&cd.TotalReq)
+
 		cards = append(cards, cd)
 	}
 	return c.JSON(fiber.Map{"success": true, "cards": cards})
@@ -154,6 +160,7 @@ func AddCard(c *fiber.Ctx) error {
 		Icon         string `json:"icon"`
 		EndpointURL  string `json:"endpoint_url"`
 		PlatformType string `json:"platform_type"`
+		RateLimit    int    `json:"rate_limit"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
@@ -161,13 +168,41 @@ func AddCard(c *fiber.Ctx) error {
 
 	id := uuid.New().String()
 	_, err := database.Router.GetGlobalManagerDB().Exec(
-		"INSERT INTO api_cards (id, section_id, name, icon, endpoint_url, platform_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		id, body.SectionID, body.Name, body.Icon, body.EndpointURL, body.PlatformType, time.Now().Unix(),
+		"INSERT INTO api_cards (id, section_id, name, icon, endpoint_url, platform_type, rate_limit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		id, body.SectionID, body.Name, body.Icon, body.EndpointURL, body.PlatformType, body.RateLimit, time.Now().Unix(),
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create card"})
 	}
 	return c.JSON(fiber.Map{"success": true, "id": id})
+}
+
+func UpdateCard(c *fiber.Ctx) error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
+	}
+	id := c.Params("id")
+	var body struct {
+		Name         string `json:"name"`
+		Icon         string `json:"icon"`
+		EndpointURL  string `json:"endpoint_url"`
+		PlatformType string `json:"platform_type"`
+		RateLimit    int    `json:"rate_limit"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
+	}
+
+	_, err := database.Router.GetGlobalManagerDB().Exec(`
+		UPDATE api_cards 
+		SET name = ?, icon = ?, endpoint_url = ?, platform_type = ?, rate_limit = ?
+		WHERE id = ?
+	`, body.Name, body.Icon, body.EndpointURL, body.PlatformType, body.RateLimit, id)
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to update card"})
+	}
+	return c.JSON(fiber.Map{"success": true})
 }
 
 // ─── KEYS ────────────────────────────────────────────────────────────────────

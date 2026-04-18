@@ -66,9 +66,9 @@ CREATE TABLE IF NOT EXISTS api_cards (
     section_id TEXT NOT NULL,
     name TEXT NOT NULL,
     icon TEXT,
-    description TEXT,
     endpoint_url TEXT,
     platform_type TEXT DEFAULT 'openai_compatible',
+    rate_limit INTEGER DEFAULT 1000,
     is_deleted INTEGER DEFAULT 0,
     created_at INTEGER NOT NULL,
     FOREIGN KEY (section_id) REFERENCES api_sections(id) ON DELETE CASCADE
@@ -125,6 +125,7 @@ func InitGlobalManagerSchema(db *sql.DB) error {
 	// Ensure api_cards has new columns if it existed before
 	_, _ = db.Exec("ALTER TABLE api_cards ADD COLUMN endpoint_url TEXT")
 	_, _ = db.Exec("ALTER TABLE api_cards ADD COLUMN platform_type TEXT DEFAULT 'openai_compatible'")
+	_, _ = db.Exec("ALTER TABLE api_cards ADD COLUMN rate_limit INTEGER DEFAULT 1000")
 
 	// Ensure managed_api_keys has new columns
 	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN card_id TEXT")

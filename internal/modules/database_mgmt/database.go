@@ -1,8 +1,10 @@
 package database_mgmt
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
+	"sync"
 	"strings"
 	"time"
 
@@ -39,33 +41,44 @@ func ReloadManagedDatabases() error {
 	defer rows.Close()
 
 	var mDBs []database.ManagedDB
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
 	for rows.Next() {
 		var id, slug, name, category, dbURL, encrypted string
 		if err := rows.Scan(&id, &slug, &name, &category, &dbURL, &encrypted); err != nil {
 			continue
 		}
 
-		token, err := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
-		if err != nil {
-			log.Printf("Failed to decrypt DB token for %s", slug)
-			continue
-		}
+		wg.Add(1)
+		go func(id, slug, name, category, dbURL, encrypted string) {
+			defer wg.Done()
+			token, err := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
+			if err != nil {
+				log.Printf("Failed to decrypt DB token for %s", slug)
+				return
+			}
 
-		// Connect to the DB
-		db, err := database.ConnectTurso(dbURL, token)
-		if err != nil {
-			log.Printf("Failed to connect to managed DB %s: %v", slug, err)
-			continue
-		}
+			// Connect to the DB without pinging on boot (Pulse will verify health)
+			connStr := fmt.Sprintf("%s?authToken=%s", dbURL, token)
+			db, err := sql.Open("libsql", connStr)
+			if err != nil {
+				log.Printf("Failed to open managed DB %s: %v", slug, err)
+				return
+			}
 
-		mDBs = append(mDBs, database.ManagedDB{
-			Slug:     slug,
-			Name:     name,
-			Category: category,
-			DB:       db,
-		})
+			mu.Lock()
+			mDBs = append(mDBs, database.ManagedDB{
+				Slug:     slug,
+				Name:     name,
+				Category: category,
+				DB:       db,
+			})
+			mu.Unlock()
+		}(id, slug, name, category, dbURL, encrypted)
 	}
 
+	wg.Wait()
 	database.Router.ReloadDynamicDBs(mDBs)
 	return nil
 }

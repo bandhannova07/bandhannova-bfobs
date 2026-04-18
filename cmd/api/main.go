@@ -59,7 +59,6 @@ func main() {
 	if err := database_mgmt.ReloadManagedAPIKeys(); err != nil {
 		log.Printf("⚠️  Initial API Key sync warning: %v", err)
 	}
-	database_mgmt.HarmonizeNames()
 
 	// Start Background Workers
 	go func() {

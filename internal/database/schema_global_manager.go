@@ -7,15 +7,29 @@ import (
 
 // GlobalManagerSchema defines tables for system-wide configuration
 const GlobalManagerSchema = `
-CREATE TABLE IF NOT EXISTS managed_databases (
-    slug TEXT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS managed_products (
+    id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    category TEXT NOT NULL,
-    url TEXT NOT NULL,
-    encrypted_token TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    description TEXT,
+    icon TEXT,
     status TEXT DEFAULT 'active',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS managed_databases (
+    id TEXT PRIMARY KEY,
+    slug TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    db_url TEXT NOT NULL,
+    encrypted_token TEXT NOT NULL,
+    product_id TEXT,
+    status TEXT DEFAULT 'active',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(product_id) REFERENCES managed_products(id)
 );
 
 CREATE TABLE IF NOT EXISTS managed_api_keys (

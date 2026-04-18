@@ -49,6 +49,10 @@ func SetupRoutes(app *fiber.App) {
 	adminAuth.Get("/databases/:slug", database_mgmt.GetDatabaseDetails)
 	adminAuth.Get("/health/pulse", database_mgmt.GetPulseHealth)
 
+	// Product Management
+	adminAuth.Get("/products", database_mgmt.ListProducts)
+	adminAuth.Post("/products", database_mgmt.AddProduct)
+
 	// User Auth Routes
 	authGroup := v1.Group("/auth")
 	authGroup.Post("/signup", auth.Signup)

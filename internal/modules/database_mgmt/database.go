@@ -22,10 +22,22 @@ type DatabaseResponse struct {
 	Name      string `json:"name"`
 	Category  string `json:"category"`
 	URL       string `json:"db_url"`
+	ProductID string `json:"product_id,omitempty"`
 	Status    string `json:"status"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
 	IsCore    bool   `json:"is_core"` // True if loaded from .env
+}
+
+type ProductResponse struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Description string `json:"description"`
+	Icon        string `json:"icon"`
+	Status      string `json:"status"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
 }
 
 // ReloadManagedDatabases hot-swaps active DBs from the global managed_databases table
@@ -143,13 +155,17 @@ func ListDatabases(c *fiber.Ctx) error {
 
 	// Add Managed DBs
 	if database.Router != nil && database.Router.GetGlobalManagerDB() != nil {
-		rows, err := database.Router.GetGlobalManagerDB().Query("SELECT id, slug, name, category, db_url, status, created_at, updated_at FROM managed_databases ORDER BY created_at DESC")
+		rows, err := database.Router.GetGlobalManagerDB().Query("SELECT id, slug, name, category, db_url, product_id, status, created_at, updated_at FROM managed_databases ORDER BY created_at DESC")
 		if err == nil {
 			defer rows.Close()
 			for rows.Next() {
 				var d DatabaseResponse
-				if err := rows.Scan(&d.ID, &d.Slug, &d.Name, &d.Category, &d.URL, &d.Status, &d.CreatedAt, &d.UpdatedAt); err == nil {
+				var productID sql.NullString
+				if err := rows.Scan(&d.ID, &d.Slug, &d.Name, &d.Category, &d.URL, &productID, &d.Status, &d.CreatedAt, &d.UpdatedAt); err == nil {
 					d.IsCore = false
+					if productID.Valid {
+						d.ProductID = productID.String
+					}
 					resp = append(resp, d)
 				}
 			}
@@ -160,10 +176,11 @@ func ListDatabases(c *fiber.Ctx) error {
 }
 
 type AddDBRequest struct {
-	Name     string `json:"name"`
-	Category string `json:"category"`
-	URL      string `json:"db_url"`
-	Token    string `json:"token"`
+	Name      string `json:"name"`
+	Category  string `json:"category"`
+	URL       string `json:"db_url"`
+	Token     string `json:"token"`
+	ProductID string `json:"product_id"`
 }
 
 // AddDatabase adds a new dynamic database with auto-indexing naming
@@ -236,10 +253,11 @@ func AddDatabase(c *fiber.Ctx) error {
 	now := time.Now().Unix()
 
 	_, err = database.Router.GetGlobalManagerDB().Exec(
-		"INSERT INTO managed_databases (id, slug, name, category, db_url, encrypted_token, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)",
-		id, slug, finalName, req.Category, req.URL, encrypted, now, now,
+		"INSERT INTO managed_databases (id, slug, name, category, db_url, encrypted_token, product_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+		id, slug, finalName, req.Category, req.URL, encrypted, req.ProductID, now, now,
 	)
 	if err != nil {
+		log.Printf("Failed to save DB: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": true, "message": "Failed to save database config"})
 	}
 
@@ -364,6 +382,64 @@ func GetDatabaseDetails(c *fiber.Ctx) error {
 		"total_bytes": totalBytes,
 		"tables": tables,
 	})
+}
+
+// ─── PRODUCT MANAGEMENT ───────────────────────────────────────────────────
+
+func ListProducts(c *fiber.Ctx) error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Global DB not connected"})
+	}
+
+	rows, err := database.Router.GetGlobalManagerDB().Query("SELECT id, name, slug, description, icon, status, created_at, updated_at FROM managed_products ORDER BY created_at DESC")
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to query products"})
+	}
+	defer rows.Close()
+
+	var products []ProductResponse
+	for rows.Next() {
+		var p ProductResponse
+		if err := rows.Scan(&p.ID, &p.Name, &p.Slug, &p.Description, &p.Icon, &p.Status, &p.CreatedAt, &p.UpdatedAt); err == nil {
+			products = append(products, p)
+		}
+	}
+
+	return c.JSON(fiber.Map{"success": true, "products": products})
+}
+
+type AddProductRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Icon        string `json:"icon"`
+}
+
+func AddProduct(c *fiber.Ctx) error {
+	ip, _ := c.Locals("admin_ip").(string)
+	var req AddProductRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid payload"})
+	}
+
+	if req.Name == "" {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Product name is required"})
+	}
+
+	id := uuid.New().String()
+	slug := strings.ToLower(strings.ReplaceAll(req.Name, " ", "-"))
+	now := time.Now().Unix()
+
+	_, err := database.Router.GetGlobalManagerDB().Exec(
+		"INSERT INTO managed_products (id, name, slug, description, icon, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)",
+		id, req.Name, slug, req.Description, req.Icon, now, now,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to save product"})
+	}
+
+	admin.LogAudit("ADD_PRODUCT", req.Name, ip, fmt.Sprintf("Added product: %s", req.Name))
+
+	return c.JSON(fiber.Map{"success": true, "message": "Product added successfully", "id": id})
 }
 
 // GetPulseHealth returns real-time health data for all shards

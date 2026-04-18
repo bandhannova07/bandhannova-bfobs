@@ -22,17 +22,22 @@ type APISection struct {
 }
 
 type APICard struct {
-	ID           string `json:"id"`
-	SectionID    string `json:"section_id"`
-	Name         string `json:"name"`
-	Icon         string `json:"icon"`
-	EndpointURL  string `json:"endpoint_url"`
-	PlatformType string `json:"platform_type"`
-	RateLimit    int    `json:"rate_limit"`
-	KeyCount     int    `json:"key_count"`
-	TotalReq     int    `json:"total_req"`
-	IsDeleted    bool   `json:"is_deleted"`
-	CreatedAt    int64  `json:"created_at"`
+	ID              string `json:"id"`
+	SectionID       string `json:"section_id"`
+	Name            string `json:"name"`
+	Icon            string `json:"icon"`
+	EndpointURL     string `json:"endpoint_url"`
+	PlatformType    string `json:"platform_type"`
+	LimitRPS        int    `json:"limit_rps"`
+	LimitRPM        int    `json:"limit_rpm"`
+	LimitRPH        int    `json:"limit_rph"`
+	LimitRPD        int    `json:"limit_rpd"`
+	LimitRPMonth    int    `json:"limit_rpmonth"`
+	LimitConcurrent int    `json:"limit_concurrent"`
+	KeyCount        int    `json:"key_count"`
+	TotalReq        int    `json:"total_req"`
+	IsDeleted       bool   `json:"is_deleted"`
+	CreatedAt       int64  `json:"created_at"`
 }
 
 type APIKeyResponse struct {
@@ -104,7 +109,7 @@ func ListCards(c *fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
 	}
 	sectionID := c.Query("section_id")
-	query := "SELECT id, section_id, name, icon, endpoint_url, platform_type, rate_limit, is_deleted, created_at FROM api_cards WHERE is_deleted = 0"
+	query := "SELECT id, section_id, name, icon, endpoint_url, platform_type, limit_rps, limit_rpm, limit_rph, limit_rpd, limit_rpmonth, limit_concurrent, is_deleted, created_at FROM api_cards WHERE is_deleted = 0"
 	var args []interface{}
 
 	if sectionID != "" {
@@ -129,7 +134,12 @@ func ListCards(c *fiber.Ctx) error {
 			&cd.Icon, 
 			&cd.EndpointURL, 
 			&cd.PlatformType, 
-			&cd.RateLimit,
+			&cd.LimitRPS,
+			&cd.LimitRPM,
+			&cd.LimitRPH,
+			&cd.LimitRPD,
+			&cd.LimitRPMonth,
+			&cd.LimitConcurrent,
 			&isDel, 
 			&cd.CreatedAt,
 		)
@@ -155,22 +165,28 @@ func AddCard(c *fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
 	}
 	var body struct {
-		SectionID    string `json:"section_id"`
-		Name         string `json:"name"`
-		Icon         string `json:"icon"`
-		EndpointURL  string `json:"endpoint_url"`
-		PlatformType string `json:"platform_type"`
-		RateLimit    int    `json:"rate_limit"`
+		SectionID       string `json:"section_id"`
+		Name            string `json:"name"`
+		Icon            string `json:"icon"`
+		EndpointURL     string `json:"endpoint_url"`
+		PlatformType    string `json:"platform_type"`
+		LimitRPS        int    `json:"limit_rps"`
+		LimitRPM        int    `json:"limit_rpm"`
+		LimitRPH        int    `json:"limit_rph"`
+		LimitRPD        int    `json:"limit_rpd"`
+		LimitRPMonth    int    `json:"limit_rpmonth"`
+		LimitConcurrent int    `json:"limit_concurrent"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
 	}
 
 	id := uuid.New().String()
-	_, err := database.Router.GetGlobalManagerDB().Exec(
-		"INSERT INTO api_cards (id, section_id, name, icon, endpoint_url, platform_type, rate_limit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		id, body.SectionID, body.Name, body.Icon, body.EndpointURL, body.PlatformType, body.RateLimit, time.Now().Unix(),
-	)
+	_, err := database.Router.GetGlobalManagerDB().Exec(`
+		INSERT INTO api_cards (id, section_id, name, icon, endpoint_url, platform_type, limit_rps, limit_rpm, limit_rph, limit_rpd, limit_rpmonth, limit_concurrent, created_at) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, body.SectionID, body.Name, body.Icon, body.EndpointURL, body.PlatformType, body.LimitRPS, body.LimitRPM, body.LimitRPH, body.LimitRPD, body.LimitRPMonth, body.LimitConcurrent, time.Now().Unix())
+	
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create card"})
 	}
@@ -183,11 +199,16 @@ func UpdateCard(c *fiber.Ctx) error {
 	}
 	id := c.Params("id")
 	var body struct {
-		Name         string `json:"name"`
-		Icon         string `json:"icon"`
-		EndpointURL  string `json:"endpoint_url"`
-		PlatformType string `json:"platform_type"`
-		RateLimit    int    `json:"rate_limit"`
+		Name            string `json:"name"`
+		Icon            string `json:"icon"`
+		EndpointURL     string `json:"endpoint_url"`
+		PlatformType    string `json:"platform_type"`
+		LimitRPS        int    `json:"limit_rps"`
+		LimitRPM        int    `json:"limit_rpm"`
+		LimitRPH        int    `json:"limit_rph"`
+		LimitRPD        int    `json:"limit_rpd"`
+		LimitRPMonth    int    `json:"limit_rpmonth"`
+		LimitConcurrent int    `json:"limit_concurrent"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
@@ -195,9 +216,9 @@ func UpdateCard(c *fiber.Ctx) error {
 
 	_, err := database.Router.GetGlobalManagerDB().Exec(`
 		UPDATE api_cards 
-		SET name = ?, icon = ?, endpoint_url = ?, platform_type = ?, rate_limit = ?
+		SET name = ?, icon = ?, endpoint_url = ?, platform_type = ?, limit_rps = ?, limit_rpm = ?, limit_rph = ?, limit_rpd = ?, limit_rpmonth = ?, limit_concurrent = ?
 		WHERE id = ?
-	`, body.Name, body.Icon, body.EndpointURL, body.PlatformType, body.RateLimit, id)
+	`, body.Name, body.Icon, body.EndpointURL, body.PlatformType, body.LimitRPS, body.LimitRPM, body.LimitRPH, body.LimitRPD, body.LimitRPMonth, body.LimitConcurrent, id)
 
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to update card"})

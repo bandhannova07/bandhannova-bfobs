@@ -15,13 +15,78 @@ import (
 	"github.com/bandhannova/api-hunter/internal/security"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"sync"
 )
 
-var userAgents = []string{
-	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-	"Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
+var (
+	userAgents = []string{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
+	}
+	concurrentRequests = make(map[string]int)
+	concurrentMutex    sync.Mutex
+)
+
+type CardLimits struct {
+	ID              string
+	LimitRPS        int
+	LimitRPM        int
+	LimitRPH        int
+	LimitRPD        int
+	LimitRPMonth    int
+	LimitConcurrent int
+}
+
+func checkRateLimits(card CardLimits) error {
+	concurrentMutex.Lock()
+	current := concurrentRequests[card.ID]
+	if card.LimitConcurrent > 0 && current >= card.LimitConcurrent {
+		concurrentMutex.Unlock()
+		return fmt.Errorf("concurrent request limit reached (%d)", card.LimitConcurrent)
+	}
+	concurrentRequests[card.ID]++
+	concurrentMutex.Unlock()
+
+	// Check Time-based limits from DB
+	now := time.Now().Unix()
+	
+	checks := []struct {
+		Window int64
+		Limit  int
+		Name   string
+	}{
+		{1, card.LimitRPS, "per second"},
+		{60, card.LimitRPM, "per minute"},
+		{3600, card.LimitRPH, "per hour"},
+		{86400, card.LimitRPD, "per day"},
+		{2592000, card.LimitRPMonth, "per month"},
+	}
+
+	for _, c := range checks {
+		if c.Limit > 0 {
+			var count int
+			err := database.Router.GetGlobalManagerDB().QueryRow(
+				"SELECT COUNT(*) FROM api_usage_logs WHERE card_id = ? AND timestamp > ?", 
+				card.ID, now-c.Window,
+			).Scan(&count)
+			if err == nil && count >= c.Limit {
+				decrementConcurrent(card.ID)
+				return fmt.Errorf("rate limit exceeded: %d requests %s", c.Limit, c.Name)
+			}
+		}
+	}
+
+	return nil
+}
+
+func decrementConcurrent(cardID string) {
+	concurrentMutex.Lock()
+	if concurrentRequests[cardID] > 0 {
+		concurrentRequests[cardID]--
+	}
+	concurrentMutex.Unlock()
 }
 
 func ProxyHandler(c *fiber.Ctx) error {
@@ -33,18 +98,29 @@ func ProxyHandler(c *fiber.Ctx) error {
 	// Retry logic (Try up to 3 different keys if one fails)
 	for attempt := 0; attempt < 3; attempt++ {
 		var keyID, cardID, encrypted, cardEndpoint string
+		var limits CardLimits
 		
 		err := database.Router.GetGlobalManagerDB().QueryRow(`
-			SELECT k.id, k.card_id, k.encrypted_value, c.endpoint_url
+			SELECT k.id, k.card_id, k.encrypted_value, c.endpoint_url,
+			       c.limit_rps, c.limit_rpm, c.limit_rph, c.limit_rpd, c.limit_rpmonth, c.limit_concurrent
 			FROM managed_api_keys k
 			JOIN api_cards c ON k.card_id = c.id
 			WHERE (c.name = ? OR k.provider = ?) AND k.status = 'active' AND k.is_deleted = 0
 			ORDER BY k.updated_at ASC
 			LIMIT 1
-		`, provider, provider).Scan(&keyID, &cardID, &encrypted, &cardEndpoint)
+		`, provider, provider).Scan(
+			&keyID, &cardID, &encrypted, &cardEndpoint,
+			&limits.LimitRPS, &limits.LimitRPM, &limits.LimitRPH, &limits.LimitRPD, &limits.LimitRPMonth, &limits.LimitConcurrent,
+		)
 
 		if err != nil {
-			break
+			return c.Status(404).JSON(fiber.Map{"error": true, "message": "No active keys found for this provider"})
+		}
+		limits.ID = cardID
+
+		// Enforce Rate Limits
+		if err := checkRateLimits(limits); err != nil {
+			return c.Status(429).JSON(fiber.Map{"error": true, "message": err.Error()})
 		}
 
 		apiKey, _ := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
@@ -55,6 +131,7 @@ func ProxyHandler(c *fiber.Ctx) error {
 
 		req, err := http.NewRequest(c.Method(), fullURL, bytes.NewReader(c.Body()))
 		if err != nil {
+			decrementConcurrent(cardID)
 			continue
 		}
 
@@ -95,23 +172,26 @@ func ProxyHandler(c *fiber.Ctx) error {
 			req.Header.Set("Authorization", "Bearer "+apiKey)
 		}
 
-		client := &http.Client{Timeout: 45 * time.Second}
+		client := &http.Client{Timeout: 60 * time.Second}
 		start := time.Now()
 		resp, err := client.Do(req)
 		latency := time.Since(start).Milliseconds()
 
 		if err != nil {
+			decrementConcurrent(cardID)
 			database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix()+300, keyID)
 			continue
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode == 429 || resp.StatusCode == 401 {
+			decrementConcurrent(cardID)
 			database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix()+1800, keyID)
 			continue
 		}
 
 		// Success
+		decrementConcurrent(cardID)
 		database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix(), keyID)
 		logUsage(keyID, cardID, c.Method(), fullURL, resp.StatusCode, int(latency), c.IP())
 

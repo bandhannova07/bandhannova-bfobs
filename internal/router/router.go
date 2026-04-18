@@ -50,6 +50,7 @@ func SetupRoutes(app *fiber.App) {
 	adminAuth.Post("/api/sections", api_mgmt.AddSection)
 	adminAuth.Get("/api/cards", api_mgmt.ListCards)
 	adminAuth.Post("/api/cards", api_mgmt.AddCard)
+	adminAuth.Put("/api/cards/:id", api_mgmt.UpdateCard)
 	adminAuth.Get("/api/keys", api_mgmt.ListKeys)
 	adminAuth.Post("/api/keys", api_mgmt.AddKey)
 	adminAuth.Post("/api/items/:type/:id/delete", api_mgmt.DeleteAPIItem)

@@ -26,7 +26,6 @@ type APICard struct {
 	SectionID    string `json:"section_id"`
 	Name         string `json:"name"`
 	Icon         string `json:"icon"`
-	Description  string `json:"description"`
 	EndpointURL  string `json:"endpoint_url"`
 	PlatformType string `json:"platform_type"`
 	KeyCount     int    `json:"key_count"`
@@ -103,7 +102,7 @@ func ListCards(c *fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
 	}
 	sectionID := c.Query("section_id")
-	query := "SELECT id, section_id, name, icon, description, endpoint_url, platform_type, is_deleted, created_at FROM api_cards WHERE is_deleted = 0"
+	query := "SELECT id, section_id, name, icon, endpoint_url, platform_type, is_deleted, created_at FROM api_cards WHERE is_deleted = 0"
 	var args []interface{}
 
 	if sectionID != "" {
@@ -126,7 +125,6 @@ func ListCards(c *fiber.Ctx) error {
 			&cd.SectionID, 
 			&cd.Name, 
 			&cd.Icon, 
-			&cd.Description, 
 			&cd.EndpointURL, 
 			&cd.PlatformType, 
 			&isDel, 
@@ -154,7 +152,6 @@ func AddCard(c *fiber.Ctx) error {
 		SectionID    string `json:"section_id"`
 		Name         string `json:"name"`
 		Icon         string `json:"icon"`
-		Description  string `json:"description"`
 		EndpointURL  string `json:"endpoint_url"`
 		PlatformType string `json:"platform_type"`
 	}
@@ -164,8 +161,8 @@ func AddCard(c *fiber.Ctx) error {
 
 	id := uuid.New().String()
 	_, err := database.Router.GetGlobalManagerDB().Exec(
-		"INSERT INTO api_cards (id, section_id, name, icon, description, endpoint_url, platform_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		id, body.SectionID, body.Name, body.Icon, body.Description, body.EndpointURL, body.PlatformType, time.Now().Unix(),
+		"INSERT INTO api_cards (id, section_id, name, icon, endpoint_url, platform_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		id, body.SectionID, body.Name, body.Icon, body.EndpointURL, body.PlatformType, time.Now().Unix(),
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create card"})

@@ -21,7 +21,7 @@ import (
 const (
 	AdminTokenTTL         = 24 * time.Hour
 	LoginRateLimit        = 5          // per minute
-	AdminRateLimit        = 30         // per minute
+	AdminRateLimit        = 500        // per minute (Increased for smooth dashboard experience)
 	AutoBanThreshold      = 20         // total failed logins
 	AutoBanDuration       = 1 * time.Hour
 	RateLimitWindowSeconds = 60

@@ -2,7 +2,6 @@ package api_proxy
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net/http"
 	"time"

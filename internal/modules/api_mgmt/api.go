@@ -118,11 +118,25 @@ func ListCards(c *fiber.Ctx) error {
 	for rows.Next() {
 		var cd APICard
 		var isDel int
-		rows.Scan(&cd.ID, &cd.SectionID, &cd.Name, &cd.Icon, &cd.Description, &cd.EndpointURL, &cd.PlatformType, &isDel, &cd.CreatedAt)
+		err := rows.Scan(
+			&cd.ID, 
+			&cd.SectionID, 
+			&cd.Name, 
+			&cd.Icon, 
+			&cd.Description, 
+			&cd.EndpointURL, 
+			&cd.PlatformType, 
+			&isDel, 
+			&cd.CreatedAt,
+		)
+		if err != nil {
+			log.Printf("⚠️  Error scanning card: %v", err)
+			continue
+		}
 		cd.IsDeleted = isDel == 1
 		
 		// Get key count
-		database.Router.GetGlobalManagerDB().QueryRow("SELECT COUNT(*) FROM managed_api_keys WHERE card_id = ? AND is_deleted = 0", cd.ID).Scan(&cd.KeyCount)
+		_ = database.Router.GetGlobalManagerDB().QueryRow("SELECT COUNT(*) FROM managed_api_keys WHERE card_id = ? AND is_deleted = 0", cd.ID).Scan(&cd.KeyCount)
 		
 		cards = append(cards, cd)
 	}

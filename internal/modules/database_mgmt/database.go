@@ -146,7 +146,7 @@ type AddDBRequest struct {
 	Token    string `json:"token"`
 }
 
-// AddDatabase adds a new dynamic database
+// AddDatabase adds a new dynamic database with auto-indexing naming
 func AddDatabase(c *fiber.Ctx) error {
 	ip, _ := c.Locals("admin_ip").(string)
 	var req AddDBRequest
@@ -154,15 +154,39 @@ func AddDatabase(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": true, "message": "Invalid payload"})
 	}
 
-	if req.Name == "" || req.URL == "" || req.Token == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": true, "message": "Name, URL, and Token required"})
+	if req.Category == "" || req.URL == "" || req.Token == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": true, "message": "Category, URL, and Token required"})
 	}
 
-	validCats := map[string]bool{"auth": true, "analytics": true, "global": true, "user": true}
-	if !validCats[req.Category] {
+	validCats := map[string]string{
+		"auth":      "Auth Shard",
+		"analytics": "Analytics Shard",
+		"global":    "Global Manager",
+		"user":      "User Shard",
+	}
+
+	baseName, ok := validCats[req.Category]
+	if !ok {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": true, "message": "Invalid category"})
 	}
 
+	// 1. Calculate Auto-Index for Name
+	var count int
+	err := database.Router.GetGlobalManagerDB().QueryRow(
+		"SELECT COUNT(*) FROM managed_databases WHERE category = ?", 
+		req.Category,
+	).Scan(&count)
+	if err != nil {
+		count = 0
+	}
+
+	// Set final name: e.g., "User Shard 0"
+	finalName := fmt.Sprintf("%s %d", baseName, count)
+	if req.Name != "" {
+		// If user provided a name, we can still use it or override.
+		// User requested auto, so we prioritize the generated one.
+		finalName = req.Name 
+	}
 	// 1. Test Connection
 	testDB, err := database.ConnectTurso(req.URL, req.Token)
 	if err != nil {
@@ -177,13 +201,13 @@ func AddDatabase(c *fiber.Ctx) error {
 	}
 
 	// 3. Generate Slug & Save
-	slug := strings.ToLower(strings.ReplaceAll(req.Name, " ", "-")) + "-" + uuid.New().String()[:6]
+	slug := strings.ToLower(strings.ReplaceAll(finalName, " ", "-")) + "-" + uuid.New().String()[:6]
 	id := uuid.New().String()
 	now := time.Now().Unix()
 
 	_, err = database.Router.GetGlobalManagerDB().Exec(
 		"INSERT INTO managed_databases (id, slug, name, category, db_url, encrypted_token, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)",
-		id, slug, req.Name, req.Category, req.URL, encrypted, now, now,
+		id, slug, finalName, req.Category, req.URL, encrypted, now, now,
 	)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": true, "message": "Failed to save database config"})

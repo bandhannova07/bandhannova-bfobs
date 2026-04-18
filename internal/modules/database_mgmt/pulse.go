@@ -2,6 +2,7 @@ package database_mgmt
 
 import (
 	"log"
+	"reflect"
 	"sync"
 	"time"
 
@@ -70,7 +71,7 @@ func checkAllShards() {
 }
 
 func checkShard(results map[string]ShardHealth, name, shardType string, db interface{}) {
-	if db == nil {
+	if db == nil || (reflect.ValueOf(db).Kind() == reflect.Ptr && reflect.ValueOf(db).IsNil()) {
 		results[name] = ShardHealth{Name: name, Type: shardType, Status: "offline", LastCheck: time.Now()}
 		return
 	}

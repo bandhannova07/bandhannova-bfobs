@@ -91,25 +91,37 @@ func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, globalURL
 	router := &ShardRouter{}
 	var err error
 
-	router.authDB, err = ConnectTurso(authURL, authToken)
-	if err != nil {
-		return fmt.Errorf("auth shard connection failed: %w", err)
+	if authURL != "" {
+		router.authDB, err = ConnectTurso(authURL, authToken)
+		if err != nil {
+			log.Printf("⚠️ Auth shard connection failed: %v", err)
+		}
 	}
 
-	router.analyticsDB, err = ConnectTurso(analyticsURL, analyticsToken)
-	if err != nil {
-		return fmt.Errorf("analytics shard connection failed: %w", err)
+	if analyticsURL != "" {
+		router.analyticsDB, err = ConnectTurso(analyticsURL, analyticsToken)
+		if err != nil {
+			log.Printf("⚠️ Analytics shard connection failed: %v", err)
+		}
 	}
 
-	router.globalManagerDB, err = ConnectTurso(globalURL, globalToken)
-	if err != nil {
-		return fmt.Errorf("global manager shard connection failed: %w", err)
+	if globalURL != "" {
+		router.globalManagerDB, err = ConnectTurso(globalURL, globalToken)
+		if err != nil {
+			return fmt.Errorf("global manager shard connection failed: %w", err)
+		}
+	} else {
+		return fmt.Errorf("global manager URL is required")
 	}
 
 	for i, url := range userURLs {
+		if url == "" {
+			continue
+		}
 		db, err := ConnectTurso(url, userTokens[i])
 		if err != nil {
-			return fmt.Errorf("user shard %d connection failed: %w", i, err)
+			log.Printf("⚠️ User shard %d connection failed: %v", i, err)
+			continue
 		}
 		router.userDBs = append(router.userDBs, db)
 	}

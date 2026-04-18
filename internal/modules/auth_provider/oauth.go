@@ -3,7 +3,6 @@ package auth_provider
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"fmt"
 	"time"
 
 	"github.com/bandhannova/api-hunter/internal/config"

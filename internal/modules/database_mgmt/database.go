@@ -3,7 +3,6 @@ package database_mgmt
 import (
 	"database/sql"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strings"

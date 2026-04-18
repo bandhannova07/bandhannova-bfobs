@@ -52,15 +52,17 @@ func main() {
 	email.InitEmailHandlers()
 	market.InitMarketHandlers()
 
-	// 3. Hot-Reload Dynamic Managed Databases
+	// 3. Sync Dynamic Managed Databases & Keys (Synchronous on boot for stability)
+	if err := database_mgmt.ReloadManagedDatabases(); err != nil {
+		log.Printf("⚠️  Initial database sync warning: %v", err)
+	}
+	if err := database_mgmt.ReloadManagedAPIKeys(); err != nil {
+		log.Printf("⚠️  Initial API Key sync warning: %v", err)
+	}
+	database_mgmt.HarmonizeNames()
+
+	// Start Background Workers
 	go func() {
-		if err := database_mgmt.ReloadManagedDatabases(); err != nil {
-			log.Printf("⚠️  Dynamic database sync warning: %v", err)
-		}
-		if err := database_mgmt.ReloadManagedAPIKeys(); err != nil {
-			log.Printf("⚠️  API Key sync warning: %v", err)
-		}
-		database_mgmt.HarmonizeNames()
 		// Start Pulse Monitoring (Every 60 seconds)
 		database_mgmt.StartPulseWorker(60 * time.Second)
 		// Start Anti-Sleep System (Every 3 minutes)

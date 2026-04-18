@@ -214,6 +214,145 @@ func logUsage(keyID, cardID, method, path string, status, latency int, ip string
 	`, id, keyID, cardID, method, path, status, latency, ip, time.Now().Unix())
 }
 
+func EcosystemProxyHandler(c *fiber.Ctx) error {
+	sectionSlug := strings.ToLower(c.Params("section"))
+	cardSlug := strings.ToLower(c.Params("card"))
+	
+	rows, err := database.Router.GetGlobalManagerDB().Query(`
+		SELECT c.id, c.name, s.name
+		FROM api_cards c
+		JOIN api_sections s ON c.section_id = s.id
+		WHERE c.is_deleted = 0
+	`)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Database error"})
+	}
+	defer rows.Close()
+
+	var cardID string
+	for rows.Next() {
+		var cid, cname, sname string
+		rows.Scan(&cid, &cname, &sname)
+		
+		genSectionSlug := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(sname)), " ", "-")
+		genCardSlug := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(cname)), " ", "-")
+		
+		if genSectionSlug == sectionSlug && (genCardSlug == cardSlug || cid == cardSlug) {
+			cardID = cid
+			break
+		}
+	}
+
+	if cardID == "" {
+		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Ecosystem endpoint not found"})
+	}
+	return proxyWithCardID(c, cardID)
+}
+
+func proxyWithCardID(c *fiber.Ctx, cardID string) error {
+	// Retry logic (Try up to 3 different keys if one fails)
+	for attempt := 0; attempt < 3; attempt++ {
+		var keyID, encrypted, cardEndpoint string
+		var limits CardLimits
+		
+		err := database.Router.GetGlobalManagerDB().QueryRow(`
+			SELECT k.id, k.encrypted_value, c.endpoint_url,
+			       c.limit_rps, c.limit_rpm, c.limit_rph, c.limit_rpd, c.limit_rpmonth, c.limit_concurrent
+			FROM managed_api_keys k
+			JOIN api_cards c ON k.card_id = c.id
+			WHERE k.card_id = ? AND k.status = 'active' AND k.is_deleted = 0
+			ORDER BY k.updated_at ASC
+			LIMIT 1
+		`, cardID).Scan(
+			&keyID, &encrypted, &cardEndpoint,
+			&limits.LimitRPS, &limits.LimitRPM, &limits.LimitRPH, &limits.LimitRPD, &limits.LimitRPMonth, &limits.LimitConcurrent,
+		)
+
+		if err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": true, "message": "No active keys found for this provider"})
+		}
+		limits.ID = cardID
+
+		if err := checkRateLimits(limits); err != nil {
+			return c.Status(429).JSON(fiber.Map{"error": true, "message": err.Error()})
+		}
+		
+		apiKey, _ := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
+		fullURL := cardEndpoint + c.Params("*")
+		if qs := string(c.Request().URI().QueryString()); qs != "" {
+			fullURL += "?" + qs
+		}
+
+		req, err := http.NewRequest(c.Method(), fullURL, bytes.NewReader(c.Body()))
+		if err != nil {
+			decrementConcurrent(cardID)
+			continue
+		}
+
+		c.Request().Header.VisitAll(func(key, value []byte) {
+			k := string(key)
+			if k != "Host" && k != "Authorization" && k != "User-Agent" {
+				req.Header.Set(k, string(value))
+			}
+		})
+		
+		ua := userAgents[rand.Intn(len(userAgents))]
+		req.Header.Set("User-Agent", ua)
+		fakeIP := fmt.Sprintf("%d.%d.%d.%d", rand.Intn(254)+1, rand.Intn(254)+1, rand.Intn(254)+1, rand.Intn(254)+1)
+		req.Header.Set("X-Forwarded-For", fakeIP)
+		
+		if strings.Contains(cardEndpoint, "anthropic.com") {
+			req.Header.Set("x-api-key", apiKey)
+			req.Header.Set("anthropic-version", "2023-06-01")
+		} else if strings.Contains(cardEndpoint, "googlegenesis") || strings.Contains(cardEndpoint, "generativelanguage") {
+			if !strings.Contains(fullURL, "key=") {
+				if strings.Contains(fullURL, "?") {
+					fullURL += "&key=" + apiKey
+				} else {
+					fullURL += "?key=" + apiKey
+				}
+				newURL, err := url.Parse(fullURL)
+				if err == nil {
+					req.URL = newURL
+				}
+			}
+		} else {
+			req.Header.Set("Authorization", "Bearer "+apiKey)
+		}
+
+		client := &http.Client{Timeout: 60 * time.Second}
+		start := time.Now()
+		resp, err := client.Do(req)
+		latency := time.Since(start).Milliseconds()
+
+		if err != nil {
+			decrementConcurrent(cardID)
+			database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix()+300, keyID)
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == 429 || resp.StatusCode == 401 {
+			decrementConcurrent(cardID)
+			database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix()+1800, keyID)
+			continue
+		}
+
+		decrementConcurrent(cardID)
+		database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix(), keyID)
+		logUsage(keyID, cardID, c.Method(), fullURL, resp.StatusCode, int(latency), c.IP())
+
+		c.Status(resp.StatusCode)
+		for k, v := range resp.Header {
+			if len(v) > 0 { c.Set(k, v[0]) }
+		}
+		body, _ := io.ReadAll(resp.Body)
+		return c.Send(body)
+	}
+
+	return c.Status(502).JSON(fiber.Map{"error": true, "message": "All keys exhausted or rate-limited"})
+}
+
 func ListLogs(c *fiber.Ctx) error {
 	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
 		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database disconnected"})

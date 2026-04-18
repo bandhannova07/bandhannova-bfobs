@@ -21,6 +21,9 @@ import (
 
 // SetupRoutes configures all routes for the BFOBS Gateway
 func SetupRoutes(app *fiber.App) {
+	// Ecosystem Execution URLs (/{section}/{card}/execute) - Clean root URLs (Priority)
+	app.Post("/:section/:card/execute", api_proxy.EcosystemProxyHandler)
+
 	v1 := app.Group("/v1", middleware.RedisRateLimiter(60, time.Minute))
 
 	// OAuth 2.0 / BandhanNova ID Routes
@@ -106,4 +109,5 @@ func SetupRoutes(app *fiber.App) {
 
 	// Webhooks
 	app.Post("/webhooks/resend", email.HandleEmailWebhook)
+
 }

@@ -32,7 +32,7 @@ func ProxyHandler(c *fiber.Ctx) error {
 
 	// Retry logic (Try up to 3 different keys if one fails)
 	for attempt := 0; attempt < 3; attempt++ {
-		var keyID, cardID, encrypted, cardEndpoint, platformType string
+		var keyID, cardID, encrypted, cardEndpoint string
 		
 		err := database.Router.GetGlobalManagerDB().QueryRow(`
 			SELECT k.id, k.card_id, k.encrypted_value, c.endpoint_url

@@ -21,14 +21,16 @@ type APISection struct {
 }
 
 type APICard struct {
-	ID          string `json:"id"`
-	SectionID   string `json:"section_id"`
-	Name        string `json:"name"`
-	Icon        string `json:"icon"`
-	Description string `json:"description"`
-	KeyCount    int    `json:"key_count"`
-	IsDeleted   bool   `json:"is_deleted"`
-	CreatedAt   int64  `json:"created_at"`
+	ID           string `json:"id"`
+	SectionID    string `json:"section_id"`
+	Name         string `json:"name"`
+	Icon         string `json:"icon"`
+	Description  string `json:"description"`
+	EndpointURL  string `json:"endpoint_url"`
+	PlatformType string `json:"platform_type"`
+	KeyCount     int    `json:"key_count"`
+	IsDeleted    bool   `json:"is_deleted"`
+	CreatedAt    int64  `json:"created_at"`
 }
 
 type APIKeyResponse struct {

@@ -120,39 +120,14 @@ func InitGlobalManagerSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to apply global manager schema: %w", err)
 	}
 
-	// ─── AUTO-MIGRATIONS FOR EXISTING TABLES ────────────────────────────────
-	
-	// ─── API MANAGEMENT MIGRATIONS ───────────────────────────────────────
 	log.Println("🛠️  Running API Management migrations...")
 	
-	// Create tables explicitly first to ensure they exist for the migrations below
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS api_sections (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL,
-			created_at INTEGER NOT NULL
-		);
-	`)
-	if err != nil { log.Printf("⚠️  Error creating api_sections: %v", err) }
+	// Ensure api_cards has new columns if it existed before
+	_, _ = db.Exec("ALTER TABLE api_cards ADD COLUMN endpoint_url TEXT")
+	_, _ = db.Exec("ALTER TABLE api_cards ADD COLUMN platform_type TEXT DEFAULT 'openai_compatible'")
 
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS api_cards (
-			id TEXT PRIMARY KEY,
-			section_id TEXT NOT NULL,
-			name TEXT NOT NULL,
-			icon TEXT,
-			description TEXT,
-			is_deleted INTEGER DEFAULT 0,
-			created_at INTEGER NOT NULL,
-			FOREIGN KEY (section_id) REFERENCES api_sections(id) ON DELETE CASCADE
-		);
-	`)
-	if err != nil { log.Printf("⚠️  Error creating api_cards: %v", err) }
-
-	// Add columns to existing managed_api_keys table
+	// Ensure managed_api_keys has new columns
 	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN card_id TEXT")
-	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN api_url TEXT")
-	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN use_url INTEGER DEFAULT 0")
 	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN is_deleted INTEGER DEFAULT 0")
 
 	// Ensure "Unused APIs" section exists

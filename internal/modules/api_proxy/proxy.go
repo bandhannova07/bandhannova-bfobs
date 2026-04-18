@@ -30,38 +30,33 @@ func ProxyHandler(c *fiber.Ctx) error {
 
 	// Retry logic (Try up to 3 different keys if one fails)
 	for attempt := 0; attempt < 3; attempt++ {
-		// 1. Fetch Least Recently Used key for this provider
 		var keyID, cardID, encrypted, cardEndpoint, platformType string
-		query := `
+		
+		err := database.Router.GetGlobalManagerDB().QueryRow(`
 			SELECT k.id, k.card_id, k.encrypted_value, c.endpoint_url, c.platform_type
 			FROM managed_api_keys k
 			JOIN api_cards c ON k.card_id = c.id
 			WHERE (c.name = ? OR k.provider = ?) AND k.status = 'active' AND k.is_deleted = 0
 			ORDER BY k.updated_at ASC
 			LIMIT 1
-		`
-		err := database.Router.GetGlobalManagerDB().QueryRow(query, provider, provider).Scan(
-			&keyID, &cardID, &encrypted, &cardEndpoint, &platformType,
-		)
+		`, provider, provider).Scan(&keyID, &cardID, &encrypted, &cardEndpoint, &platformType)
 
 		if err != nil {
-			return c.Status(404).JSON(fiber.Map{"error": true, "message": "No healthy API keys available"})
+			break // No more keys to try
 		}
 
-		// 2. Decrypt the API Key
 		apiKey, _ := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
-
-		// 3. Construct Target URL
 		fullURL := cardEndpoint + c.Params("*")
-		queryString := string(c.Request().URI().QueryString())
-		if queryString != "" {
-			fullURL += "?" + queryString
+		if qs := string(c.Request().URI().QueryString()); qs != "" {
+			fullURL += "?" + qs
 		}
 
-		// 4. Create HTTP Request
-		req, _ := http.NewRequest(c.Method(), fullURL, bytes.NewReader(c.Body()))
+		req, err := http.NewRequest(c.Method(), fullURL, bytes.NewReader(c.Body()))
+		if err != nil {
+			continue
+		}
 
-		// Copy headers + Randomize to avoid IP/Bot fingerprinting
+		// Header processing
 		c.Request().Header.VisitAll(func(key, value []byte) {
 			k := string(key)
 			if k != "Host" && k != "Authorization" && k != "User-Agent" {
@@ -69,40 +64,36 @@ func ProxyHandler(c *fiber.Ctx) error {
 			}
 		})
 		
-		// Anonymization Layer
-		req.Header.Set("User-Agent", userAgents[rand.Intn(len(userAgents))])
-		req.Header.Set("X-Forwarded-For", fmt.Sprintf("%d.%d.%d.%d", rand.Intn(255), rand.Intn(255), rand.Intn(255), rand.Intn(255)))
+		// Anonymization
+		ua := userAgents[rand.Intn(len(userAgents))]
+		req.Header.Set("User-Agent", ua)
+		fakeIP := fmt.Sprintf("%d.%d.%d.%d", rand.Intn(254)+1, rand.Intn(254)+1, rand.Intn(254)+1, rand.Intn(254)+1)
+		req.Header.Set("X-Forwarded-For", fakeIP)
 		
-		// Handle different platform types
-		switch platformType {
-		case "anthropic":
+		if platformType == "anthropic" {
 			req.Header.Set("x-api-key", apiKey)
 			req.Header.Set("anthropic-version", "2023-06-01")
-		default: // OpenAI Compatible
+		} else {
 			req.Header.Set("Authorization", "Bearer "+apiKey)
 		}
 
-		// 5. Execute with Timeout
 		client := &http.Client{Timeout: 45 * time.Second}
 		start := time.Now()
 		resp, err := client.Do(req)
 		latency := time.Since(start).Milliseconds()
 
 		if err != nil {
-			// Mark key for cooling down if unreachable
 			database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix()+300, keyID)
 			continue
 		}
 		defer resp.Body.Close()
 
-		// 6. Handle Failures (Rate limits or Invalid keys)
 		if resp.StatusCode == 429 || resp.StatusCode == 401 {
-			// Mark key for cooling down (Push to far future in LRU)
 			database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix()+1800, keyID)
 			continue
 		}
 
-		// 7. Success - Record Metrics & Return Response
+		// Success
 		database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix(), keyID)
 		logUsage(keyID, cardID, c.Method(), fullURL, resp.StatusCode, int(latency), c.IP())
 
@@ -114,7 +105,7 @@ func ProxyHandler(c *fiber.Ctx) error {
 		return c.Send(body)
 	}
 
-	return c.Status(502).JSON(fiber.Map{"error": true, "message": "All available keys failed or rate-limited"})
+	return c.Status(502).JSON(fiber.Map{"error": true, "message": "All keys exhausted or rate-limited"})
 }
 
 func logUsage(keyID, cardID, method, path string, status, latency int, ip string) {

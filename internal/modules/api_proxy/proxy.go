@@ -85,7 +85,10 @@ func ProxyHandler(c *fiber.Ctx) error {
 					fullURL += "?key=" + apiKey
 				}
 				// Re-create request with new URL if needed
-				req.URL, _ = url.Parse(fullURL)
+				newURL, err := url.Parse(fullURL)
+				if err == nil {
+					req.URL = newURL
+				}
 			}
 		} else {
 			// Default: OpenAI Compatible

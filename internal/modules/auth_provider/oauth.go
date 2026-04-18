@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bandhannova/api-hunter/internal/config"
 	"github.com/bandhannova/api-hunter/internal/database"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 )
-
-var JWTSecret = []byte("bandhannova_super_secret_idp_key_2026") // In production, move to .env
 
 type OAuthClient struct {
 	ClientID     string
@@ -88,7 +87,7 @@ func Token(c *fiber.Ctx) error {
 		"email": "user@bandhannova.in",
 	})
 
-	tokenString, err := token.SignedString(JWTSecret)
+	tokenString, err := token.SignedString([]byte(config.AppConfig.JWTSecret))
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "server_error"})
 	}

@@ -202,27 +202,49 @@ func AddKey(c *fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
 	}
 	var body struct {
-		CardID   string `json:"card_id"`
-		Label    string `json:"label"`
-		Value    string `json:"value"`
-		APIURL   string `json:"api_url"`
-		UseURL   bool   `json:"use_url"`
-		Provider string `json:"provider"`
+		CardID   string   `json:"card_id"`
+		Label    string   `json:"label"`
+		Value    string   `json:"value"`
+		Values   []string `json:"values"` // For bulk insert
+		APIURL   string   `json:"api_url"`
+		UseURL   bool     `json:"use_url"`
+		Provider string   `json:"provider"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
 	}
 
+	now := time.Now().Unix()
+	useURLInt := 0
+	if body.UseURL { useURLInt = 1 }
+
+	// Handle Bulk Insert
+	if len(body.Values) > 0 {
+		tx, err := database.Router.GetGlobalManagerDB().Begin()
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": true, "message": "Transaction failed"})
+		}
+		for i, val := range body.Values {
+			if strings.TrimSpace(val) == "" { continue }
+			encrypted, _ := security.Encrypt(val, config.AppConfig.BandhanNovaMasterKey)
+			label := fmt.Sprintf("%s #%d", body.Label, i+1)
+			id := uuid.New().String()
+			_, _ = tx.Exec(`
+				INSERT INTO managed_api_keys (id, card_id, provider, encrypted_value, label, api_url, use_url, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`, id, body.CardID, body.Provider, encrypted, label, body.APIURL, useURLInt, now, now)
+		}
+		tx.Commit()
+		return c.JSON(fiber.Map{"success": true, "message": "Bulk keys saved"})
+	}
+
+	// Handle Single Insert
 	encrypted, err := security.Encrypt(body.Value, config.AppConfig.BandhanNovaMasterKey)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Encryption failed"})
 	}
 
 	id := uuid.New().String()
-	now := time.Now().Unix()
-	useURLInt := 0
-	if body.UseURL { useURLInt = 1 }
-
 	_, err = database.Router.GetGlobalManagerDB().Exec(`
 		INSERT INTO managed_api_keys (id, card_id, provider, encrypted_value, label, api_url, use_url, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)

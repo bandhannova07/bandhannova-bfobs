@@ -123,12 +123,19 @@ func ReloadManagedAPIKeys() error {
 func ListDatabases(c *fiber.Ctx) error {
 	var resp []DatabaseResponse
 
-	// Add Core DBs
+	// Add Core DBs only if they actually have a URL
 	if config.AppConfig.TursoAuthURL != "" {
 		resp = append(resp, DatabaseResponse{ID: "core-auth", Slug: "core-auth", Name: "Core Auth", Category: "auth", URL: config.AppConfig.TursoAuthURL, Status: "active", IsCore: true})
+	}
+	if config.AppConfig.TursoAnalyticsURL != "" {
 		resp = append(resp, DatabaseResponse{ID: "core-analytics", Slug: "core-analytics", Name: "Core Analytics", Category: "analytics", URL: config.AppConfig.TursoAnalyticsURL, Status: "active", IsCore: true})
+	}
+	if config.AppConfig.TursoGlobalURL != "" {
 		resp = append(resp, DatabaseResponse{ID: "core-global", Slug: "core-global", Name: "Core Global", Category: "global", URL: config.AppConfig.TursoGlobalURL, Status: "active", IsCore: true})
-		for i, u := range config.AppConfig.TursoUserShardURLs {
+	}
+	
+	for i, u := range config.AppConfig.TursoUserShardURLs {
+		if u != "" {
 			slug := fmt.Sprintf("core-user-%d", i)
 			resp = append(resp, DatabaseResponse{ID: slug, Slug: slug, Name: fmt.Sprintf("Core User Shard %d", i), Category: "user", URL: u, Status: "active", IsCore: true})
 		}

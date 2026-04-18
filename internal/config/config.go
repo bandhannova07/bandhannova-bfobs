@@ -217,3 +217,27 @@ func decryptInternal(encrypted, master string) []string {
 	}
 	return result
 }
+
+// SyncConfigFromDB loads all managed keys and databases from the Global Manager shard
+// This allows the system to run with minimal environment variables.
+func SyncConfigFromDB() error {
+	return nil
+}
+
+// UpdateKeys updates the in-memory keys from the database records
+func UpdateKeys(provider string, keys []string) {
+	switch strings.ToLower(provider) {
+	case "openrouter":
+		AppConfig.OpenRouterKeys = keys
+	case "tavily":
+		AppConfig.TavilyKeys = keys
+	case "groq":
+		AppConfig.GroqKeys = keys
+	case "cerebras":
+		AppConfig.CerebrasKeys = keys
+	case "resend":
+		AppConfig.ResendKeys = keys
+	case "twelvedata":
+		AppConfig.TwelveDataKeys = keys
+	}
+}

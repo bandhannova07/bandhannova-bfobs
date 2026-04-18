@@ -1,45 +1,39 @@
 package system
 
 import (
-	"strings"
-
+	"fmt"
 	"github.com/gofiber/fiber/v2"
 )
 
 // ServeStatusPage serves the animated root landing page for the backend
 func ServeStatusPage(c *fiber.Ctx) error {
 	c.Set("Content-Type", "text/html")
-	
-	// Default status is running unless something critical fails.
-	// We can enhance this later to check DB connectivity.
-	statusText := "BandhanNova Mind Running"
-	statusColor := "#00ff88"
-	
 	html := `
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BandhanNova Backend</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+    <title>BandhanNova Mind | Running</title>
     <style>
         :root {
-            --bg-color: #050a15;
-            --text-color: STATUS_COLOR;
-            --glow-color: STATUS_COLOR;
+            --bg: #030712;
+            --neon-blue: #00d2ff;
+            --neon-purple: #9d50bb;
+            --text: #e5e7eb;
         }
-        
-        body, html {
+
+        body {
             margin: 0;
             padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: var(--bg-color);
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            height: 100vh;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
-            font-family: 'Orbitron', sans-serif;
+            justify-content: center;
             overflow: hidden;
         }
 
@@ -48,91 +42,119 @@ func ServeStatusPage(c *fiber.Ctx) error {
             position: relative;
         }
 
-        .typo {
-            font-size: 5vw;
-            font-weight: 900;
-            color: transparent;
-            -webkit-text-stroke: 2px var(--text-color);
-            text-transform: uppercase;
-            letter-spacing: 5px;
+        /* Rounded Loading Object */
+        .orb-container {
             position: relative;
-            animation: pulse-glow 2s infinite alternate;
+            width: 200px;
+            height: 200px;
+            margin-bottom: 40px;
         }
 
-        .typo::before {
-            content: "STATUS_TEXT";
+        .orb {
             position: absolute;
-            left: 0;
-            top: 0;
-            width: 0%;
+            width: 100%;
             height: 100%;
-            color: var(--text-color);
-            -webkit-text-stroke: 0px transparent;
-            overflow: hidden;
-            border-right: 4px solid var(--text-color);
-            animation: typing 4s steps(30) infinite alternate, cursor-blink 0.5s step-end infinite alternate;
-            filter: drop-shadow(0 0 15px var(--glow-color));
+            border-radius: 50%;
+            border: 2px solid transparent;
+            border-top: 2px solid var(--neon-blue);
+            border-bottom: 2px solid var(--neon-purple);
+            animation: spin 3s linear infinite;
         }
 
-        .dots {
-            display: inline-block;
-            min-width: 30px;
-            text-align: left;
-            animation: dots-anim 2s infinite steps(4);
-        }
-
-        @keyframes pulse-glow {
-            0% { text-shadow: 0 0 10px rgba(0,255,136,0.1); }
-            100% { text-shadow: 0 0 30px rgba(0,255,136,0.4); }
-        }
-
-        @keyframes typing {
-            0% { width: 0; }
-            100% { width: 100%; }
-        }
-
-        @keyframes cursor-blink {
-            50% { border-color: transparent; }
-        }
-
-        @keyframes dots-anim {
-            0% { content: ""; }
-            25% { content: "."; }
-            50% { content: ".."; }
-            75% { content: "..."; }
-            100% { content: "..."; }
-        }
-
-        .ambient-light {
+        .orb-inner {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 50vw;
-            height: 50vw;
-            background: radial-gradient(circle, rgba(0,255,136,0.05) 0%, rgba(0,0,0,0) 70%);
-            z-index: -1;
-            pointer-events: none;
-            animation: breath 6s infinite ease-in-out;
+            top: 20px; left: 20px; right: 20px; bottom: 20px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0,210,255,0.1) 0%, rgba(157,80,187,0.05) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 50px rgba(0,210,255,0.2);
         }
 
-        @keyframes breath {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
-            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+        .orb-core {
+            width: 40px;
+            height: 40px;
+            background: var(--text);
+            border-radius: 50%;
+            box-shadow: 0 0 30px #fff, 0 0 60px var(--neon-blue);
+            animation: pulse 2s infinite ease-in-out;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 1; }
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            letter-spacing: 5px;
+            margin: 0;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+
+        .status-text {
+            margin-top: 10px;
+            font-size: 1.1rem;
+            color: rgba(255,255,255,0.5);
+            letter-spacing: 2px;
+        }
+
+        /* Animated Dots */
+        .dots::after {
+            content: '';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+
+        .badge {
+            margin-top: 30px;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            font-size: 0.8rem;
+            color: var(--neon-blue);
         }
     </style>
 </head>
 <body>
-    <div class="ambient-light"></div>
     <div class="container">
-        <div class="typo">STATUS_TEXT<span class="dots">...</span></div>
+        <div class="orb-container">
+            <div class="orb"></div>
+            <div class="orb-inner">
+                <div class="orb-core"></div>
+            </div>
+        </div>
+        <h1>BandhanNova Mind</h1>
+        <div class="status-text">RUNNING<span class="dots"></span></div>
+        <div class="badge">BFOBS GATEWAY v2.1</div>
     </div>
 </body>
 </html>
 	`
-	
-	html = strings.ReplaceAll(html, "STATUS_TEXT", statusText)
-	html = strings.ReplaceAll(html, "STATUS_COLOR", statusColor)
-	
 	return c.SendString(html)
+}
+
+// FormatLatency is a helper function (not used in HTML but keep for utility)
+func FormatLatency(l int64) string {
+	return fmt.Sprintf("%dms", l)
 }

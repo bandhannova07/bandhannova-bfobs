@@ -28,6 +28,7 @@ func SetupRoutes(app *fiber.App) {
 	adminGroup := v1.Group("/admin")
 	adminGroup.Use(middleware.AdminLoginRateLimiter())
 	adminGroup.Post("/login", admin.AdminLogin)
+	admin.InitWebAuthn(adminGroup)
 
 	// Protected Admin Routes
 	adminAuth := adminGroup.Group("/")

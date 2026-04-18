@@ -70,6 +70,42 @@ func ReloadManagedDatabases() error {
 	return nil
 }
 
+// ReloadManagedAPIKeys hot-reloads API keys from the global managed_api_keys table
+func ReloadManagedAPIKeys() error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return fmt.Errorf("global DB not connected")
+	}
+
+	rows, err := database.Router.GetGlobalManagerDB().Query("SELECT provider, encrypted_value FROM managed_api_keys WHERE status = 'active'")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	providerKeys := make(map[string][]string)
+	for rows.Next() {
+		var provider, encrypted string
+		if err := rows.Scan(&provider, &encrypted); err != nil {
+			continue
+		}
+
+		key, err := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
+		if err != nil {
+			log.Printf("Failed to decrypt API key for provider: %s", provider)
+			continue
+		}
+
+		providerKeys[provider] = append(providerKeys[provider], key)
+	}
+
+	for provider, keys := range providerKeys {
+		config.UpdateKeys(provider, keys)
+	}
+
+	log.Printf("🛡️  Managed API keys reloaded from database")
+	return nil
+}
+
 // ListDatabases returns all active databases (core + managed)
 func ListDatabases(c *fiber.Ctx) error {
 	var resp []DatabaseResponse

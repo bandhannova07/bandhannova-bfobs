@@ -57,6 +57,9 @@ func main() {
 		if err := database_mgmt.ReloadManagedDatabases(); err != nil {
 			log.Printf("⚠️  Dynamic database sync warning: %v", err)
 		}
+		if err := database_mgmt.ReloadManagedAPIKeys(); err != nil {
+			log.Printf("⚠️  API Key sync warning: %v", err)
+		}
 		// Start Pulse Monitoring (Every 60 seconds)
 		database_mgmt.StartPulseWorker(60 * time.Second)
 		// Start Anti-Sleep System (Every 3 minutes)

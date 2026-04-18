@@ -187,20 +187,30 @@ func AddDatabase(c *fiber.Ctx) error {
 		// User requested auto, so we prioritize the generated one.
 		finalName = req.Name 
 	}
-	// 1. Test Connection
+	// 1. Check for Duplicate URL
+	var exists int
+	database.Router.GetGlobalManagerDB().QueryRow(
+		"SELECT COUNT(*) FROM managed_databases WHERE db_url = ?", 
+		req.URL,
+	).Scan(&exists)
+	if exists > 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": true, "message": "Database with this URL already exists in system"})
+	}
+
+	// 2. Test Connection
 	testDB, err := database.ConnectTurso(req.URL, req.Token)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": true, "message": "Failed to connect to Turso database. Verify URL and Token."})
 	}
 	defer testDB.Close()
 
-	// 2. Encrypt Token
+	// 3. Encrypt Token
 	encrypted, err := security.Encrypt(req.Token, config.AppConfig.BandhanNovaMasterKey)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": true, "message": "Encryption failed"})
 	}
 
-	// 3. Generate Slug & Save
+	// 4. Generate Slug & Save
 	slug := strings.ToLower(strings.ReplaceAll(finalName, " ", "-")) + "-" + uuid.New().String()[:6]
 	id := uuid.New().String()
 	now := time.Now().Unix()
@@ -213,12 +223,59 @@ func AddDatabase(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": true, "message": "Failed to save database config"})
 	}
 
-	admin.LogAudit("ADD_DATABASE", req.Category, ip, fmt.Sprintf("Added DB: %s (%s)", req.Name, req.URL))
+	admin.LogAudit("ADD_DATABASE", req.Category, ip, fmt.Sprintf("Added DB: %s (%s)", finalName, req.URL))
 
 	// Hot Reload
 	go ReloadManagedDatabases()
 
 	return c.JSON(fiber.Map{"success": true, "message": "Database added successfully", "slug": slug})
+}
+
+// HarmonizeNames renames all existing database records to the indexed format
+func HarmonizeNames() error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return fmt.Errorf("global DB not connected")
+	}
+
+	categories := []string{"auth", "analytics", "global", "user"}
+	validCats := map[string]string{
+		"auth":      "Auth Shard",
+		"analytics": "Analytics Shard",
+		"global":    "Global Manager",
+		"user":      "User Shard",
+	}
+
+	for _, cat := range categories {
+		rows, err := database.Router.GetGlobalManagerDB().Query(
+			"SELECT id, db_url FROM managed_databases WHERE category = ? ORDER BY created_at ASC", 
+			cat,
+		)
+		if err != nil {
+			continue
+		}
+		
+		type item struct{ id, url string }
+		var items []item
+		for rows.Next() {
+			var id, url string
+			rows.Scan(&id, &url)
+			items = append(items, item{id, url})
+		}
+		rows.Close()
+
+		for i, itm := range items {
+			newName := fmt.Sprintf("%s %d", validCats[cat], i)
+			newSlug := strings.ToLower(strings.ReplaceAll(newName, " ", "-")) + "-" + itm.id[:6]
+			
+			database.Router.GetGlobalManagerDB().Exec(
+				"UPDATE managed_databases SET name = ?, slug = ? WHERE id = ?",
+				newName, newSlug, itm.id,
+			)
+		}
+	}
+	
+	log.Println("🎨 Database names harmonized with new indexing system")
+	return nil
 }
 
 // ─── 101% ACCURATE DB DETAILS ───────────────────────────────────────────────

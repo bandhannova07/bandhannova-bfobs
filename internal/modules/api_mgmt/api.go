@@ -48,6 +48,7 @@ type APIKeyResponse struct {
 	MaskedValue   string `json:"masked_value"`
 	APIURL        string `json:"api_url"`
 	UseURL        bool   `json:"use_url"`
+	Usage         map[string]int `json:"usage"`
 	IsDeleted     bool   `json:"is_deleted"`
 	CreatedAt     int64  `json:"created_at"`
 	UpdatedAt     int64  `json:"updated_at"`
@@ -257,11 +258,31 @@ func ListKeys(c *fiber.Ctx) error {
 		k.IsDeleted = isDel == 1
 
 		// Mask Key
-		decrypted, _ := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
-		if len(decrypted) > 8 {
-			k.MaskedValue = decrypted[:4] + "..." + decrypted[len(decrypted)-4:]
+		val, _ := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
+		if len(val) > 8 {
+			k.MaskedValue = val[:4] + "...." + val[len(val)-4:]
 		} else {
-			k.MaskedValue = "***"
+			k.MaskedValue = "********"
+		}
+
+		// Calculate Usage for each window
+		k.Usage = make(map[string]int)
+		now := time.Now().Unix()
+		windows := map[string]int64{
+			"sec": 1,
+			"min": 60,
+			"hour": 3600,
+			"day": 86400,
+			"month": 2592000,
+		}
+
+		for name, window := range windows {
+			var count int
+			_ = database.Router.GetGlobalManagerDB().QueryRow(
+				"SELECT COUNT(*) FROM api_usage_logs WHERE key_id = ? AND timestamp > ?", 
+				k.ID, now-window,
+			).Scan(&count)
+			k.Usage[name] = count
 		}
 
 		keys = append(keys, k)

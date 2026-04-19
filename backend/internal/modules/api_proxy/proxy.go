@@ -1,0 +1,430 @@
+package api_proxy
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"math/rand"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/bandhannova/api-hunter/internal/config"
+	"github.com/bandhannova/api-hunter/internal/database"
+	"github.com/bandhannova/api-hunter/internal/security"
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+	"sync"
+)
+
+var (
+	userAgents = []string{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
+	}
+	concurrentRequests = make(map[string]int)
+	concurrentMutex    sync.Mutex
+)
+
+type CardLimits struct {
+	ID              string
+	LimitRPS        int
+	LimitRPM        int
+	LimitRPH        int
+	LimitRPD        int
+	LimitRPMonth    int
+	LimitConcurrent int
+}
+
+func checkRateLimits(card CardLimits) error {
+	concurrentMutex.Lock()
+	current := concurrentRequests[card.ID]
+	if card.LimitConcurrent > 0 && current >= card.LimitConcurrent {
+		concurrentMutex.Unlock()
+		return fmt.Errorf("concurrent request limit reached (%d)", card.LimitConcurrent)
+	}
+	concurrentRequests[card.ID]++
+	concurrentMutex.Unlock()
+
+	// Check Time-based limits from DB
+	now := time.Now().Unix()
+	
+	checks := []struct {
+		Window int64
+		Limit  int
+		Name   string
+	}{
+		{1, card.LimitRPS, "per second"},
+		{60, card.LimitRPM, "per minute"},
+		{3600, card.LimitRPH, "per hour"},
+		{86400, card.LimitRPD, "per day"},
+		{2592000, card.LimitRPMonth, "per month"},
+	}
+
+	for _, c := range checks {
+		if c.Limit > 0 {
+			var count int
+			err := database.Router.GetGlobalManagerDB().QueryRow(
+				"SELECT COUNT(*) FROM api_usage_logs WHERE card_id = ? AND timestamp > ?", 
+				card.ID, now-c.Window,
+			).Scan(&count)
+			if err == nil && count >= c.Limit {
+				decrementConcurrent(card.ID)
+				return fmt.Errorf("rate limit exceeded: %d requests %s", c.Limit, c.Name)
+			}
+		}
+	}
+
+	return nil
+}
+
+func decrementConcurrent(cardID string) {
+	concurrentMutex.Lock()
+	if concurrentRequests[cardID] > 0 {
+		concurrentRequests[cardID]--
+	}
+	concurrentMutex.Unlock()
+}
+
+func ProxyHandler(c *fiber.Ctx) error {
+	provider := c.Params("provider")
+	if provider == "" {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Provider is required"})
+	}
+
+	// Retry logic (Try up to 3 different keys if one fails)
+	for attempt := 0; attempt < 3; attempt++ {
+		var keyID, cardID, encrypted, cardEndpoint string
+		var limits CardLimits
+		
+		err := database.Router.GetGlobalManagerDB().QueryRow(`
+			SELECT k.id, k.card_id, k.encrypted_value, c.endpoint_url,
+			       c.limit_rps, c.limit_rpm, c.limit_rph, c.limit_rpd, c.limit_rpmonth, c.limit_concurrent
+			FROM managed_api_keys k
+			JOIN api_cards c ON k.card_id = c.id
+			WHERE (c.name = ? OR k.provider = ?) AND k.status = 'active' AND k.is_deleted = 0
+			ORDER BY k.updated_at ASC
+			LIMIT 1
+		`, provider, provider).Scan(
+			&keyID, &cardID, &encrypted, &cardEndpoint,
+			&limits.LimitRPS, &limits.LimitRPM, &limits.LimitRPH, &limits.LimitRPD, &limits.LimitRPMonth, &limits.LimitConcurrent,
+		)
+
+		if err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": true, "message": "No active keys found for this provider"})
+		}
+		limits.ID = cardID
+
+		// Enforce Rate Limits
+		if err := checkRateLimits(limits); err != nil {
+			return c.Status(429).JSON(fiber.Map{"error": true, "message": err.Error()})
+		}
+
+		apiKey, _ := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
+		
+		targetBase := cardEndpoint
+		actualKey := apiKey
+		if strings.HasPrefix(apiKey, "http://") || strings.HasPrefix(apiKey, "https://") {
+			parts := strings.Split(apiKey, "|")
+			targetBase = parts[0]
+			if len(parts) > 1 {
+				actualKey = parts[1]
+			} else {
+				actualKey = ""
+			}
+			targetBase = targetBase + cardEndpoint
+		}
+
+		fullURL := targetBase + c.Params("*")
+		if qs := string(c.Request().URI().QueryString()); qs != "" {
+			fullURL += "?" + qs
+		}
+
+		req, err := http.NewRequest(c.Method(), fullURL, bytes.NewReader(c.Body()))
+		if err != nil {
+			decrementConcurrent(cardID)
+			continue
+		}
+
+		// Header processing
+		c.Request().Header.VisitAll(func(key, value []byte) {
+			k := string(key)
+			if k != "Host" && k != "Authorization" && k != "User-Agent" {
+				req.Header.Set(k, string(value))
+			}
+		})
+		
+		// Anonymization
+		ua := userAgents[rand.Intn(len(userAgents))]
+		req.Header.Set("User-Agent", ua)
+		fakeIP := fmt.Sprintf("%d.%d.%d.%d", rand.Intn(254)+1, rand.Intn(254)+1, rand.Intn(254)+1, rand.Intn(254)+1)
+		req.Header.Set("X-Forwarded-For", fakeIP)
+		
+		// Smart Architecture Detection
+		if strings.Contains(targetBase, "anthropic.com") {
+			req.Header.Set("x-api-key", actualKey)
+			req.Header.Set("anthropic-version", "2023-06-01")
+		} else if strings.Contains(targetBase, "googlegenesis") || strings.Contains(targetBase, "generativelanguage") {
+			if actualKey != "" && !strings.Contains(fullURL, "key=") {
+				if strings.Contains(fullURL, "?") {
+					fullURL += "&key=" + actualKey
+				} else {
+					fullURL += "?key=" + actualKey
+				}
+				newURL, err := url.Parse(fullURL)
+				if err == nil {
+					req.URL = newURL
+				}
+			}
+		} else if actualKey != "" {
+			req.Header.Set("Authorization", "Bearer "+actualKey)
+		}
+
+		client := &http.Client{Timeout: 60 * time.Second}
+		start := time.Now()
+		resp, err := client.Do(req)
+		latency := time.Since(start).Milliseconds()
+
+		if err != nil {
+			decrementConcurrent(cardID)
+			database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix()+300, keyID)
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == 429 || resp.StatusCode == 401 {
+			decrementConcurrent(cardID)
+			database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix()+1800, keyID)
+			continue
+		}
+
+		// Success
+		decrementConcurrent(cardID)
+		database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix(), keyID)
+		logUsage(keyID, cardID, c.Method(), fullURL, resp.StatusCode, int(latency), c.IP())
+
+		c.Status(resp.StatusCode)
+		for k, v := range resp.Header {
+			if len(v) > 0 { c.Set(k, v[0]) }
+		}
+		body, _ := io.ReadAll(resp.Body)
+		return c.Send(body)
+	}
+
+	return c.Status(502).JSON(fiber.Map{"error": true, "message": "All keys exhausted or rate-limited"})
+}
+
+func logUsage(keyID, cardID, method, path string, status, latency int, ip string) {
+	id := uuid.New().String()
+	_, _ = database.Router.GetGlobalManagerDB().Exec(`
+		INSERT INTO api_usage_logs (id, key_id, card_id, method, path, status_code, latency_ms, ip_address, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, keyID, cardID, method, path, status, latency, ip, time.Now().Unix())
+}
+
+func EcosystemProxyHandler(c *fiber.Ctx) error {
+	sectionSlug := strings.ToLower(c.Params("section"))
+	cardSlug := strings.ToLower(c.Params("card"))
+	
+	rows, err := database.Router.GetGlobalManagerDB().Query(`
+		SELECT c.id, c.name, s.name
+		FROM api_cards c
+		JOIN api_sections s ON c.section_id = s.id
+		WHERE c.is_deleted = 0
+	`)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Database error"})
+	}
+	defer rows.Close()
+
+	var cardID string
+	for rows.Next() {
+		var cid, cname, sname string
+		rows.Scan(&cid, &cname, &sname)
+		
+		cleanSName := strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(strings.TrimSpace(sname)), "(", ""), ")", "")
+		cleanCName := strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(strings.TrimSpace(cname)), "(", ""), ")", "")
+		
+		genSectionSlug := strings.ReplaceAll(cleanSName, " ", "-")
+		genCardSlug := strings.ReplaceAll(cleanCName, " ", "-")
+		
+		if genSectionSlug == sectionSlug && (genCardSlug == cardSlug || cid == cardSlug) {
+			// Check if this card has active keys
+			var count int
+			database.Router.GetGlobalManagerDB().QueryRow("SELECT COUNT(*) FROM managed_api_keys WHERE card_id = ? AND status = 'active' AND is_deleted = 0", cid).Scan(&count)
+			
+			if count > 0 {
+				cardID = cid
+				break
+			}
+			// If no keys, keep looking (there might be another card with the same name that has keys)
+			cardID = cid 
+		}
+	}
+
+	if cardID == "" {
+		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Ecosystem endpoint not found"})
+	}
+	return proxyWithCardID(c, cardID)
+}
+
+func proxyWithCardID(c *fiber.Ctx, cardID string) error {
+	// Retry logic (Try up to 3 different keys if one fails)
+	for attempt := 0; attempt < 3; attempt++ {
+		var keyID, encrypted, cardEndpoint string
+		var limits CardLimits
+		
+		err := database.Router.GetGlobalManagerDB().QueryRow(`
+			SELECT k.id, k.encrypted_value, c.endpoint_url,
+			       c.limit_rps, c.limit_rpm, c.limit_rph, c.limit_rpd, c.limit_rpmonth, c.limit_concurrent
+			FROM managed_api_keys k
+			JOIN api_cards c ON k.card_id = c.id
+			WHERE k.card_id = ? AND k.status = 'active' AND k.is_deleted = 0
+			ORDER BY k.updated_at ASC
+			LIMIT 1
+		`, cardID).Scan(
+			&keyID, &encrypted, &cardEndpoint,
+			&limits.LimitRPS, &limits.LimitRPM, &limits.LimitRPH, &limits.LimitRPD, &limits.LimitRPMonth, &limits.LimitConcurrent,
+		)
+
+		if err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": true, "message": "No active keys found for this provider"})
+		}
+		limits.ID = cardID
+
+		if err := checkRateLimits(limits); err != nil {
+			return c.Status(429).JSON(fiber.Map{"error": true, "message": err.Error()})
+		}
+		
+		apiKey, _ := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
+		
+		// URL-based key rotation support (e.g. for Ollama distributed nodes)
+		targetBase := cardEndpoint
+		authHeader := "Authorization"
+		authPrefix := "Bearer "
+		actualKey := apiKey
+
+		if strings.HasPrefix(apiKey, "http://") || strings.HasPrefix(apiKey, "https://") {
+			// Split by | to support URL|KEY format
+			parts := strings.Split(apiKey, "|")
+			targetBase = parts[0]
+			if len(parts) > 1 {
+				actualKey = parts[1]
+			} else {
+				actualKey = "" // No key needed for this URL
+			}
+			// Append the card's defined endpoint path to the rotated node URL
+			targetBase = targetBase + cardEndpoint
+		}
+
+		fullURL := targetBase + c.Params("*")
+		if qs := string(c.Request().URI().QueryString()); qs != "" {
+			fullURL += "?" + qs
+		}
+
+		req, err := http.NewRequest(c.Method(), fullURL, bytes.NewReader(c.Body()))
+		if err != nil {
+			decrementConcurrent(cardID)
+			continue
+		}
+
+		c.Request().Header.VisitAll(func(key, value []byte) {
+			k := string(key)
+			if k != "Host" && k != "Authorization" && k != "User-Agent" {
+				req.Header.Set(k, string(value))
+			}
+		})
+		
+		ua := userAgents[rand.Intn(len(userAgents))]
+		req.Header.Set("User-Agent", ua)
+		fakeIP := fmt.Sprintf("%d.%d.%d.%d", rand.Intn(254)+1, rand.Intn(254)+1, rand.Intn(254)+1, rand.Intn(254)+1)
+		req.Header.Set("X-Forwarded-For", fakeIP)
+		
+		if strings.Contains(targetBase, "anthropic.com") {
+			req.Header.Set("x-api-key", actualKey)
+			req.Header.Set("anthropic-version", "2023-06-01")
+		} else if strings.Contains(targetBase, "googlegenesis") || strings.Contains(targetBase, "generativelanguage") {
+			if actualKey != "" && !strings.Contains(fullURL, "key=") {
+				if strings.Contains(fullURL, "?") {
+					fullURL += "&key=" + actualKey
+				} else {
+					fullURL += "?key=" + actualKey
+				}
+				newURL, err := url.Parse(fullURL)
+				if err == nil {
+					req.URL = newURL
+				}
+			}
+		} else if actualKey != "" {
+			req.Header.Set(authHeader, authPrefix+actualKey)
+		}
+
+		client := &http.Client{Timeout: 60 * time.Second}
+		start := time.Now()
+		resp, err := client.Do(req)
+		latency := time.Since(start).Milliseconds()
+
+		if err != nil {
+			decrementConcurrent(cardID)
+			database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix()+300, keyID)
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == 429 || resp.StatusCode == 401 {
+			decrementConcurrent(cardID)
+			database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix()+1800, keyID)
+			continue
+		}
+
+		decrementConcurrent(cardID)
+		database.Router.GetGlobalManagerDB().Exec("UPDATE managed_api_keys SET updated_at = ? WHERE id = ?", time.Now().Unix(), keyID)
+		logUsage(keyID, cardID, c.Method(), fullURL, resp.StatusCode, int(latency), c.IP())
+
+		c.Status(resp.StatusCode)
+		for k, v := range resp.Header {
+			if len(v) > 0 { c.Set(k, v[0]) }
+		}
+		body, _ := io.ReadAll(resp.Body)
+		return c.Send(body)
+	}
+
+	return c.Status(502).JSON(fiber.Map{"error": true, "message": "All keys exhausted or rate-limited"})
+}
+
+func ListLogs(c *fiber.Ctx) error {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database disconnected"})
+	}
+
+	rows, err := database.Router.GetGlobalManagerDB().Query(`
+		SELECT l.id, l.method, l.path, l.status_code, l.latency_ms, l.ip_address, l.timestamp, k.label, c.name
+		FROM api_usage_logs l
+		JOIN managed_api_keys k ON l.key_id = k.id
+		JOIN api_cards c ON l.card_id = c.id
+		ORDER BY l.timestamp DESC
+		LIMIT 100
+	`)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Logs unavailable"})
+	}
+	defer rows.Close()
+
+	var logs []fiber.Map
+	for rows.Next() {
+		var id, method, path, ip, keyLabel, cardName string
+		var status, latency int
+		var ts int64
+		if err := rows.Scan(&id, &method, &path, &status, &latency, &ip, &ts, &keyLabel, &cardName); err == nil {
+			logs = append(logs, fiber.Map{
+				"id": id, "method": method, "path": path, "status": status,
+				"latency": latency, "ip": ip, "timestamp": ts,
+				"key_label": keyLabel, "card_name": cardName,
+			})
+		}
+	}
+	return c.JSON(fiber.Map{"success": true, "logs": logs})
+}

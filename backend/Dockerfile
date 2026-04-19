@@ -4,17 +4,13 @@ FROM golang:1.23-alpine AS builder
 # Set working directory
 WORKDIR /app
 
-# Copy the entire project
+# Copy the source code (Assuming we are in the backend root)
 COPY . .
-
-# Move to the backend directory where go.mod is located
-WORKDIR /app/backend
 
 # Download dependencies
 RUN go mod download
 
 # Build the application
-# CGO_ENABLED=0 is important for scratch/alpine images
 RUN CGO_ENABLED=0 GOOS=linux go build -o api-hunter ./cmd/api
 
 # Final stage: Use a minimal alpine image
@@ -26,12 +22,10 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
 # Copy the binary from the builder
-COPY --from=builder /app/backend/api-hunter .
+COPY --from=builder /app/api-hunter .
 
 # Hugging Face Spaces usually uses port 7860
 ENV PORT=7860
-
-# Expose the port
 EXPOSE 7860
 
 # Run the application

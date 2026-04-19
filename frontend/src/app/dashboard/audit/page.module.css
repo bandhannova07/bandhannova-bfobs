@@ -1,0 +1,104 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.tableContainer {
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  background: var(--glass);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.table td {
+  padding: 16px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--glass-border);
+  vertical-align: middle;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.actionPill {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.act-add { color: var(--neon-green); background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.2); }
+.act-delete { color: var(--neon-red); background: rgba(255, 51, 102, 0.1); border: 1px solid rgba(255, 51, 102, 0.2); }
+.act-check { color: var(--neon-blue); background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.2); }
+.act-login { color: var(--neon-purple); background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.2); }
+.act-reload { color: var(--neon-amber); background: rgba(255, 184, 0, 0.1); border: 1px solid rgba(255, 184, 0, 0.2); }
+.act-default { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border); }
+
+.detailsText {
+  color: var(--text-secondary);
+  max-width: 400px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ipCell {
+  font-family: monospace;
+  color: var(--text-secondary);
+}
+
+.pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  align-items: center;
+}
+
+.pageInfo {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .header button {
+    width: 100%;
+  }
+
+  .table th, .table td {
+    padding: 12px 8px;
+    font-size: 12px;
+  }
+}

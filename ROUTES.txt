@@ -1,0 +1,74 @@
+===============================================
+  BandhanNova BFOBS v2.0 — Complete API Routes
+===============================================
+
+BASE URL: https://lordbandhan07-bandhannova-api-hunter.hf.space
+
+═══════════════════════════════════════════════
+  PUBLIC ROUTES (No Auth Required)
+═══════════════════════════════════════════════
+
+GET  /                → Analytics Dashboard (HTML UI)
+GET  /health          → Health Check ("BFOBS is Online 🧠🚀")
+GET  /api/status      → Real-time JSON analytics (keys, logs, timeline)
+
+═══════════════════════════════════════════════
+  AUTH ROUTES (Public - User Auth)
+═══════════════════════════════════════════════
+
+POST /auth/signup     → Create new user account
+                        Body: { "email": "...", "password": "...", "name": "..." }
+                        Returns: { user, token }
+
+POST /auth/login      → Login and get JWT token
+                        Body: { "email": "...", "password": "..." }
+                        Returns: { user, token }
+
+═══════════════════════════════════════════════
+  PROXY ROUTES (Master Key Required)
+  Header: Authorization: Bearer <BANDHANNOVA_MASTER_KEY>
+═══════════════════════════════════════════════
+POST /v1/ai/cerebras  → AI Chat Completion (Cerebras only)
+                        Model: gpt-oss-120b (Ultra-fast)
+
+POST /v1/ai/chat      → AI Chat Completion (OpenRouter)
+                        Body: OpenAI-compatible chat payload
+                        Provider: OpenRouter → Cerebras (4-tier Fallback)
+
+POST /v1/ai/stt       → Speech-to-Text (Groq Whisper)
+                        Body: Audio file (multipart)
+                        Provider: Groq only
+
+POST /v1/search/tavily → Web Search (Tavily)
+                         Body: { "query": "...", "api_key": "auto-injected" }
+                         Provider: Tavily only
+
+GET  /v1/market/*      → Financial Market Data (TwelveData)
+                         Wildcard endpoints: /quote, /price, /time_series, etc.
+                         Header: Authorization: Bearer <MASTER_KEY>
+                         Provider: TwelveData (Multi-key pooling)
+
+═══════════════════════════════════════════════
+  DATA ROUTES (JWT Token Required)
+  Header: Authorization: Bearer <jwt_token_from_login>
+═══════════════════════════════════════════════
+
+GET  /data/me          → Get user profile + plan limits
+PUT  /data/me          → Update profile (display_name, avatar_url)
+                         Body: { "display_name": "...", "avatar_url": "..." }
+
+GET  /data/chat/history → Get chat history
+                          Query: ?conversation_id=xxx (optional)
+
+POST /data/chat/save    → Save a chat message
+                          Body: { "conversation_id": "...", "role": "...", "content": "...", "model": "..." }
+                          Plan limits enforced (Free: 500 msgs, Pro: 5000, etc.)
+
+═══════════════════════════════════════════════
+  STORAGE PLAN LIMITS
+═══════════════════════════════════════════════
+
+Free  → 500 msgs,   20 convos,    5 MB,  50 saved items
+Pro   → 5000 msgs,  200 convos,  50 MB, 500 saved items
+Ultra → 25000 msgs, 1000 convos, 250 MB, 2500 saved items
+Maxx  → 100000 msgs, 5000 convos, 1 GB, 10000 saved items

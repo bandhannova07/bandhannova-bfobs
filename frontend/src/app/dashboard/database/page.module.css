@@ -1,0 +1,326 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.searchBar {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  width: 300px;
+  font-size: 14px;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.searchBar:focus {
+  border-color: var(--neon-blue);
+}
+
+.headerActions {
+  display: flex;
+  gap: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 24px;
+}
+
+.productCard {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.productCard:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--neon-blue);
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(0, 212, 255, 0.1);
+}
+
+.productCard::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle, var(--neon-blue) 0%, transparent 70%);
+  opacity: 0.05;
+  transition: opacity 0.3s;
+}
+
+.productCard:hover::after {
+  opacity: 0.15;
+}
+
+.productIcon {
+  font-size: 32px;
+  background: rgba(255, 255, 255, 0.05);
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+}
+
+.productName {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.productDesc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.productMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--glass-border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+.breadcrumbItem {
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.breadcrumbItem:hover {
+  color: var(--neon-blue);
+}
+
+.breadcrumbSeparator {
+  opacity: 0.3;
+}
+
+.shardCard {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.shardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.shardType {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 8px;
+}
+
+.type-auth { background: rgba(139, 92, 246, 0.1); color: var(--neon-purple); border: 1px solid rgba(139, 92, 246, 0.2); }
+.type-analytics { background: rgba(0, 212, 255, 0.1); color: var(--neon-blue); border: 1px solid rgba(0, 212, 255, 0.2); }
+.type-global { background: rgba(255, 184, 0, 0.1); color: var(--neon-amber); border: 1px solid rgba(255, 184, 0, 0.2); }
+.type-user { background: rgba(0, 255, 136, 0.1); color: var(--neon-green); border: 1px solid rgba(0, 255, 136, 0.2); }
+
+.shardName {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.healthBadge {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+}
+
+.storageHeader {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.storageBarBg {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.storageBarFill {
+  height: 100%;
+  background: var(--neon-blue);
+  border-radius: 4px;
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tablesGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.tablePill {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--glass-border);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tableName {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.tableCount {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .tablesGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal {
+  background: #0a0a0a;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 500px;
+  padding: 32px;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.formGroup label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.input, .select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.input:focus, .select:focus {
+  border-color: var(--neon-blue);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.select option {
+  background: #111;
+  color: #fff;
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.errorText {
+  color: var(--neon-red);
+  font-size: 13px;
+  background: rgba(255, 49, 49, 0.1);
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 49, 49, 0.2);
+}

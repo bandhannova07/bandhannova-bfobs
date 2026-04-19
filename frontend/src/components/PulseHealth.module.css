@@ -1,0 +1,102 @@
+.pulseContainer {
+  background: rgba(10, 20, 40, 0.4);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.pulseHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.pulseDot {
+  width: 10px;
+  height: 10px;
+  background: #00ff88;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #00ff88;
+  animation: beat 1.5s infinite ease-in-out;
+}
+
+@keyframes beat {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.pulseTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.pulseTime {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.pulseGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.pulseItem {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.shardInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.shardName {
+  font-size: 13px;
+  font-weight: 500;
+  color: #ddd;
+}
+
+.shardType {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.shardStatus {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.healthy { background: #00ff88; box-shadow: 0 0 5px #00ff88; }
+.unstable { background: #ffcc00; box-shadow: 0 0 5px #ffcc00; }
+.offline { background: #ff4444; box-shadow: 0 0 5px #ff4444; }
+
+.latency {
+  font-size: 10px;
+  font-family: monospace;
+  color: var(--text-secondary);
+}

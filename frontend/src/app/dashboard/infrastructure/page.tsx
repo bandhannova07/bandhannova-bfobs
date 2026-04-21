@@ -33,6 +33,19 @@ const getTypeColor = (type: string) => {
   }
 };
 
+export default function InfrastructurePage() {
+  const [shards, setShards] = useState<Shard[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingShard, setEditingShard] = useState<Shard | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    type: "global_manager",
+    db_url: "",
+    token: ""
+  });
+
   const [inspectShard, setInspectShard] = useState<Shard | null>(null);
   const [tables, setTables] = useState<any[]>([]);
   const [selectedTable, setSelectedTable] = useState<string>("");

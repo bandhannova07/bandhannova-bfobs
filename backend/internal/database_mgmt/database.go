@@ -154,50 +154,60 @@ func ReloadManagedAPIKeys() error {
 
 // ListDatabases returns all active databases (core + managed)
 func ListDatabases(c *fiber.Ctx) error {
+	productID := c.Query("product_id")
 	var resp []DatabaseResponse
 
-	// Core Master Shard
-	if config.AppConfig.TursoCoreURL != "" {
-		resp = append(resp, DatabaseResponse{ID: "core-master", Slug: "core-master", Name: "Core Master (Shard 1)", Category: "core", URL: config.AppConfig.TursoCoreURL, Status: "active", IsCore: true})
-	}
-	// Global Manager Shards
-	for i, u := range config.AppConfig.TursoGlobalURLs {
-		if u != "" {
-			slug := fmt.Sprintf("core-gm-%d", i)
-			name := fmt.Sprintf("Global Manager (Shard %d)", i+2)
-			if i+2 == 3 {
-				name += " [Primary]"
-			}
-			resp = append(resp, DatabaseResponse{ID: slug, Slug: slug, Name: name, Category: "global", URL: u, Status: "active", IsCore: true})
+	// 1. Core Databases (Only if NO product_id is provided)
+	if productID == "" {
+		// Core Master Shard
+		if config.AppConfig.TursoCoreURL != "" {
+			resp = append(resp, DatabaseResponse{ID: "core-master", Slug: "core-master", Name: "Core Master (Shard 1)", Category: "core", URL: config.AppConfig.TursoCoreURL, Status: "active", IsCore: true})
 		}
-	}
-	// Auth & Analytics Shards
-	if config.AppConfig.TursoAuthURL != "" {
-		resp = append(resp, DatabaseResponse{ID: "core-auth", Slug: "core-auth", Name: "Core Auth", Category: "auth", URL: config.AppConfig.TursoAuthURL, Status: "active", IsCore: true})
-	}
-	if config.AppConfig.TursoAnalyticsURL != "" {
-		resp = append(resp, DatabaseResponse{ID: "core-analytics", Slug: "core-analytics", Name: "Core Analytics", Category: "analytics", URL: config.AppConfig.TursoAnalyticsURL, Status: "active", IsCore: true})
-	}
-	
-	for i, u := range config.AppConfig.TursoUserShardURLs {
-		if u != "" {
-			slug := fmt.Sprintf("core-user-%d", i)
-			resp = append(resp, DatabaseResponse{ID: slug, Slug: slug, Name: fmt.Sprintf("Core User Shard %d", i), Category: "user", URL: u, Status: "active", IsCore: true})
+		// Global Manager Shards
+		for i, u := range config.AppConfig.TursoGlobalURLs {
+			if u != "" {
+				slug := fmt.Sprintf("core-gm-%d", i)
+				name := fmt.Sprintf("Global Manager (Shard %d)", i+2)
+				resp = append(resp, DatabaseResponse{ID: slug, Slug: slug, Name: name, Category: "global", URL: u, Status: "active", IsCore: true})
+			}
+		}
+		// Auth & Analytics Shards
+		if config.AppConfig.TursoAuthURL != "" {
+			resp = append(resp, DatabaseResponse{ID: "core-auth", Slug: "core-auth", Name: "Core Auth", Category: "auth", URL: config.AppConfig.TursoAuthURL, Status: "active", IsCore: true})
+		}
+		if config.AppConfig.TursoAnalyticsURL != "" {
+			resp = append(resp, DatabaseResponse{ID: "core-analytics", Slug: "core-analytics", Name: "Core Analytics", Category: "analytics", URL: config.AppConfig.TursoAnalyticsURL, Status: "active", IsCore: true})
+		}
+		
+		for i, u := range config.AppConfig.TursoUserShardURLs {
+			if u != "" {
+				slug := fmt.Sprintf("core-user-%d", i)
+				resp = append(resp, DatabaseResponse{ID: slug, Slug: slug, Name: fmt.Sprintf("Core User Shard %d", i), Category: "user", URL: u, Status: "active", IsCore: true})
+			}
 		}
 	}
 
-	// Add Managed DBs
-	if database.Router != nil && database.Router.GetGlobalManagerDB() != nil {
-		rows, err := database.Router.GetGlobalManagerDB().Query("SELECT id, slug, name, category, db_url, product_id, status, created_at, updated_at FROM managed_databases ORDER BY created_at DESC")
+	// 2. Add Managed DBs (From all Global Shards)
+	for _, db := range database.Router.GetAllGlobalManagerDBs() {
+		query := "SELECT id, slug, name, category, db_url, product_id, status, created_at, updated_at FROM managed_databases"
+		var rows *sql.Rows
+		var err error
+
+		if productID != "" {
+			rows, err = db.Query(query+" WHERE product_id = ? ORDER BY created_at DESC", productID)
+		} else {
+			rows, err = db.Query(query + " ORDER BY created_at DESC")
+		}
+
 		if err == nil {
 			defer rows.Close()
 			for rows.Next() {
 				var d DatabaseResponse
-				var productID sql.NullString
-				if err := rows.Scan(&d.ID, &d.Slug, &d.Name, &d.Category, &d.URL, &productID, &d.Status, &d.CreatedAt, &d.UpdatedAt); err == nil {
+				var pID sql.NullString
+				if err := rows.Scan(&d.ID, &d.Slug, &d.Name, &d.Category, &d.URL, &pID, &d.Status, &d.CreatedAt, &d.UpdatedAt); err == nil {
 					d.IsCore = false
-					if productID.Valid {
-						d.ProductID = productID.String
+					if pID.Valid {
+						d.ProductID = pID.String
 					}
 					resp = append(resp, d)
 				}

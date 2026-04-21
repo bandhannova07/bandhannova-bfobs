@@ -26,7 +26,7 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
   const loadShards = async () => {
     setLoading(true);
     try {
-      const res = await fetchAPI(`/admin/databases?product_slug=${product.slug}`);
+      const res = await fetchAPI(`/admin/databases?product_id=${product.id}`);
       if (res.success) setShards(res.databases || []);
     } catch (err) {
       console.error(err);

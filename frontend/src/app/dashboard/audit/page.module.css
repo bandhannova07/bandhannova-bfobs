@@ -2,37 +2,46 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .tableContainer {
-  background: var(--bg-surface);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
+  font-size: 14px;
 }
 
 .table th {
   text-align: left;
-  padding: 16px;
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-muted);
+  font-weight: 700;
   font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
   text-transform: uppercase;
-  background: var(--glass);
-  border-bottom: 1px solid var(--glass-border);
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--glass-stroke);
 }
 
 .table td {
-  padding: 16px;
-  font-size: 13px;
-  border-bottom: 1px solid var(--glass-border);
-  vertical-align: middle;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--glass-stroke);
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 .table tr:last-child td {
@@ -40,49 +49,50 @@
 }
 
 .table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .actionPill {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 6px;
   display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
-.act-add { color: var(--neon-green); background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.2); }
-.act-delete { color: var(--neon-red); background: rgba(255, 51, 102, 0.1); border: 1px solid rgba(255, 51, 102, 0.2); }
-.act-check { color: var(--neon-blue); background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.2); }
-.act-login { color: var(--neon-purple); background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.2); }
-.act-reload { color: var(--neon-amber); background: rgba(255, 184, 0, 0.1); border: 1px solid rgba(255, 184, 0, 0.2); }
-.act-default { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border); }
+.act-add { background: var(--success-glow); color: var(--success); }
+.act-delete { background: var(--danger-glow); color: var(--danger); }
+.act-check { background: var(--primary-glow); color: var(--primary); }
+.act-login { background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); }
+.act-reload { background: var(--warning-glow); color: var(--warning); }
+.act-default { background: rgba(255, 255, 255, 0.03); color: var(--text-muted); }
+
+.ipCell {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 
 .detailsText {
   color: var(--text-secondary);
-  max-width: 400px;
+  font-size: 13px;
+  max-width: 300px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.ipCell {
-  font-family: monospace;
-  color: var(--text-secondary);
-}
-
 .pagination {
   display: flex;
-  justify-content: flex-end;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 32px;
   align-items: center;
 }
 
 .pageInfo {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 
@@ -93,12 +103,8 @@
     gap: 16px;
   }
   
-  .header button {
-    width: 100%;
-  }
-
   .table th, .table td {
-    padding: 12px 8px;
-    font-size: 12px;
+    padding: 12px 16px;
   }
 }
+

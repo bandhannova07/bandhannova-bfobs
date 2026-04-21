@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
 import { fetchAPI, setToken } from "../lib/api";
@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = async (e) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!masterKey) return;
 
@@ -31,7 +31,7 @@ export default function LoginPage() {
           router.push("/dashboard");
         }, 300);
       }
-    } catch (err) {
+    } catch (err: any) {
       setError(err.message || "Authentication failed");
     } finally {
       setLoading(false);
@@ -78,3 +78,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

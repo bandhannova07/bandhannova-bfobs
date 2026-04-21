@@ -1,64 +1,76 @@
 .pulseContainer {
-  background: rgba(10, 20, 40, 0.4);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 24px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: 32px;
+  box-shadow: var(--shadow-sm);
+  animation: fadeIn 0.8s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .pulseHeader {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--glass-stroke);
 }
 
 .pulseDot {
-  width: 10px;
-  height: 10px;
-  background: #00ff88;
+  width: 8px;
+  height: 8px;
+  background: var(--success);
   border-radius: 50%;
-  box-shadow: 0 0 10px #00ff88;
-  animation: beat 1.5s infinite ease-in-out;
+  box-shadow: 0 0 10px var(--success);
+  animation: heart 1.5s infinite;
 }
 
-@keyframes beat {
+@keyframes heart {
   0% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.4); opacity: 0.5; }
   100% { transform: scale(1); opacity: 1; }
 }
 
 .pulseTitle {
-  font-size: 14px;
-  font-weight: 600;
-  color: #fff;
-  letter-spacing: 0.5px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .pulseTime {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
   margin-left: auto;
-  font-size: 11px;
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.05);
-  padding: 2px 8px;
-  border-radius: 10px;
 }
 
 .pulseGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
 }
 
 .pulseItem {
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  padding: 10px;
+  border: 1px solid var(--glass-stroke);
+  border-radius: 12px;
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  transition: var(--transition);
+}
+
+.pulseItem:hover {
+  border-color: var(--primary);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .shardInfo {
@@ -67,36 +79,51 @@
 }
 
 .shardName {
-  font-size: 13px;
-  font-weight: 500;
-  color: #ddd;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .shardType {
-  font-size: 10px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
 }
 
-.shardStatus {
+.statusPill {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.statusPill.healthy {
+  background: var(--success-glow);
+  color: var(--success);
+}
+
+.statusPill.degraded {
+  background: var(--warning-glow);
+  color: var(--warning);
+}
+
+.statusPill.offline {
+  background: var(--danger-glow);
+  color: var(--danger);
 }
 
 .statusDot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
+  background: currentColor;
 }
 
-.healthy { background: #00ff88; box-shadow: 0 0 5px #00ff88; }
-.unstable { background: #ffcc00; box-shadow: 0 0 5px #ffcc00; }
-.offline { background: #ff4444; box-shadow: 0 0 5px #ff4444; }
-
 .latency {
-  font-size: 10px;
-  font-family: monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: var(--text-secondary);
 }

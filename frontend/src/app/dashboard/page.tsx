@@ -4,8 +4,46 @@ import { useState, useEffect } from "react";
 import styles from "./page.module.css";
 import { fetchAPI } from "../../lib/api";
 
+interface DashboardStats {
+  total_requests: number;
+  success_count: number;
+  failed_count: number;
+  active_keys: number;
+  total_keys: number;
+  avg_latency_ms: number;
+}
+
+interface Provider {
+  name: string;
+  icon?: string;
+  keys: number;
+  requests: number;
+  success: number;
+}
+
+interface LogEntry {
+  timestamp: number;
+  method: string;
+  card_name?: string;
+  status: number;
+  latency: number;
+}
+
+interface Shard {
+  name: string;
+  type: string;
+  status: string;
+}
+
+interface DashboardData {
+  stats: DashboardStats;
+  providers: Provider[];
+  recent_logs: LogEntry[];
+  shards: Shard[];
+}
+
 export default function OverviewPage() {
-  const [data, setData] = useState(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
@@ -35,7 +73,7 @@ export default function OverviewPage() {
   }
 
   if (!data || !data.stats) {
-    return <div className={styles.errorState}>⚠ Failed to connect to data source.</div>;
+    return <div className={styles.errorState}>⚠ Failed to connect to data source. Please check backend connectivity.</div>;
   }
 
   const s = data.stats;
@@ -52,36 +90,29 @@ export default function OverviewPage() {
           label="Total Requests"
           value={s.total_requests.toLocaleString()}
           sub={`${s.success_count} OK / ${s.failed_count} ERR`}
-          color="var(--neon-blue)"
+          color="var(--primary)"
           icon="📡"
         />
         <StatCard
           label="Success Rate"
           value={`${successRate}%`}
           sub="Overall Uptime"
-          color="var(--neon-green)"
+          color="var(--success)"
           icon="✓"
         />
         <StatCard
           label="Active Keys"
-          value={s.active_keys}
+          value={s.active_keys.toString()}
           sub={`of ${s.total_keys} total keys`}
-          color="var(--neon-purple)"
+          color="#8b5cf6"
           icon="🔑"
         />
         <StatCard
           label="Avg Latency"
           value={`${Math.round(s.avg_latency_ms)} ms`}
           sub="Last 100 requests"
-          color="var(--neon-amber)"
+          color="var(--warning)"
           icon="⚡"
-        />
-        <StatCard
-          label="Shards Online"
-          value={`${shards.filter(sh => sh.status === "Healthy").length} / ${shards.length}`}
-          sub="Database Health"
-          color="#06d6a0"
-          icon="🗄️"
         />
       </div>
 
@@ -94,17 +125,19 @@ export default function OverviewPage() {
       <div className={styles.providerGrid}>
         {providers.map((p, i) => (
           <div key={i} className={`glass-panel ${styles.providerCard}`}>
-            <div className={styles.providerIcon}>{p.icon || "🔌"}</div>
-            <div className={styles.providerInfo}>
-              <div className={styles.providerName}>{p.name}</div>
-              <div className={styles.providerStats}>
-                <span>{p.keys} key{p.keys !== 1 ? "s" : ""}</span>
-                <span className={styles.dot}>·</span>
-                <span>{p.requests.toLocaleString()} req</span>
-                <span className={styles.dot}>·</span>
-                <span style={{ color: "var(--neon-green)" }}>
-                  {p.requests > 0 ? Math.round((p.success / p.requests) * 100) : 0}% ok
-                </span>
+            <div className={styles.providerHeader}>
+              <div className={styles.providerIcon}>{p.icon || "🔌"}</div>
+              <div className={styles.providerInfo}>
+                <div className={styles.providerName}>{p.name}</div>
+                <div className={styles.providerStats}>
+                  <span>{p.keys} key{p.keys !== 1 ? "s" : ""}</span>
+                  <span className={styles.dot}>·</span>
+                  <span>{p.requests.toLocaleString()} req</span>
+                  <span className={styles.dot}>·</span>
+                  <span style={{ color: "var(--success)" }}>
+                    {p.requests > 0 ? Math.round((p.success / p.requests) * 100) : 0}% ok
+                  </span>
+                </div>
               </div>
             </div>
             <div className={styles.providerBar}>
@@ -158,7 +191,7 @@ export default function OverviewPage() {
               ))}
               {logs.length === 0 && (
                 <tr>
-                  <td colSpan="5" className={styles.emptyRow}>
+                  <td colSpan={5} className={styles.emptyRow}>
                     No recent activity — waiting for first request
                   </td>
                 </tr>
@@ -169,7 +202,7 @@ export default function OverviewPage() {
       </div>
 
       {/* ─── Shard Health ─────────────────────────────── */}
-      <div className={styles.sectionHeader} style={{ marginTop: 32 }}>
+      <div className={styles.sectionHeader} style={{ marginTop: 40 }}>
         <span>🗄️ Shard Health</span>
       </div>
       <div className={styles.shardGrid}>
@@ -192,14 +225,24 @@ export default function OverviewPage() {
   );
 }
 
-function StatCard({ label, value, sub, color, icon }) {
+interface StatCardProps {
+  label: string;
+  value: string;
+  sub: string;
+  color: string;
+  icon: string;
+}
+
+function StatCard({ label, value, sub, color, icon }: StatCardProps) {
   return (
     <div className={`glass-panel ${styles.statCard}`}>
       <div className={styles.statGlow} style={{ background: color }}></div>
       <div className={styles.statIcon} style={{ color }}>{icon}</div>
       <div className={styles.statLabel}>{label}</div>
-      <div className={styles.statValue} style={{ color }}>{value}</div>
+      <div className={styles.statValue}>{value}</div>
       <div className={styles.statSub}>{sub}</div>
     </div>
   );
 }
+
+

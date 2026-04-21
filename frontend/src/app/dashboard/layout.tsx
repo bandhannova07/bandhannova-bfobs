@@ -1,11 +1,18 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import styles from "./layout.module.css";
 import { clearToken } from "../../lib/api";
 
-export default function DashboardLayout({ children }) {
+interface NavItem {
+  name: string;
+  path: string;
+  icon: string;
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -14,17 +21,16 @@ export default function DashboardLayout({ children }) {
     router.push("/");
   };
 
-  const navItems = [
+  const navItems: NavItem[] = [
     { name: "Overview", path: "/dashboard", icon: "📊" },
     { name: "API Keys", path: "/dashboard/keys", icon: "🔑" },
-    { name: "Databases", path: "/dashboard/database", icon: "🗄️" },
+    { name: "Products", path: "/dashboard/products", icon: "📦" },
     { name: "Security", path: "/dashboard/security", icon: "🛡️" },
     { name: "Audit Log", path: "/dashboard/audit", icon: "📋" },
   ];
 
   let currentTitle = "Command Center";
   navItems.forEach(item => {
-    // Exact match for overview, startsWith for others to handle subroutes
     if (item.path === "/dashboard") {
        if (pathname === "/dashboard") currentTitle = item.name;
     } else if (pathname.startsWith(item.path)) {
@@ -84,3 +90,4 @@ export default function DashboardLayout({ children }) {
     </div>
   );
 }
+

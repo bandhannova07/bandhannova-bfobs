@@ -1,32 +1,29 @@
 import { API_URL } from "./constants";
 
 // Helper to get token (only runs on client side in this architecture)
-const getToken = () => {
+const getToken = (): string | null => {
     if (typeof window !== "undefined") {
-        // Since we are not using cookies right now, we store token in memory or localStorage cache
-        // Note: Implementation plan suggested purely memory, but for a next.js app where pages might refresh,
-        // session storage is a slightly safer middle ground that survives refresh but dies when tab closes.
         return sessionStorage.getItem("admin_token");
     }
     return null;
 };
 
-export const setToken = (token) => {
+export const setToken = (token: string): void => {
     if (typeof window !== "undefined") {
         sessionStorage.setItem("admin_token", token);
     }
 };
 
-export const clearToken = () => {
+export const clearToken = (): void => {
     if (typeof window !== "undefined") {
         sessionStorage.removeItem("admin_token");
     }
 };
 
-export const fetchAPI = async (endpoint, options = {}) => {
+export const fetchAPI = async (endpoint: string, options: RequestInit = {}): Promise<any> => {
     const token = getToken();
     
-    const defaultHeaders = {
+    const defaultHeaders: Record<string, string> = {
         "Content-Type": "application/json",
     };
 
@@ -34,17 +31,17 @@ export const fetchAPI = async (endpoint, options = {}) => {
         defaultHeaders["X-Admin-Token"] = token;
     }
 
-    const config = {
+    const config: RequestInit = {
         ...options,
         headers: {
             ...defaultHeaders,
-            ...options.headers,
+            ...options.headers as Record<string, string>,
         },
     };
 
     const res = await fetch(`${API_URL}${endpoint}`, config);
 
-    let data;
+    let data: any;
     try {
         const text = await res.text();
         data = text ? JSON.parse(text) : {};
@@ -64,3 +61,4 @@ export const fetchAPI = async (endpoint, options = {}) => {
 
     return data;
 };
+

@@ -1,11 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import styles from "./page.module.css";
 import { fetchAPI } from "../../../lib/api";
 
+interface AuditLog {
+  id: string;
+  timestamp: number;
+  action: string;
+  target: string;
+  ip_address: string;
+  details: string;
+}
+
 export default function AuditPage() {
-  const [logs, setLogs] = useState([]);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -31,7 +40,7 @@ export default function AuditPage() {
     loadAudit();
   }, [page]);
 
-  const getActionClass = (action) => {
+  const getActionClass = (action: string) => {
     if (action.includes("ADD")) return styles["act-add"];
     if (action.includes("DELETE")) return styles["act-delete"];
     if (action.includes("CHECK")) return styles["act-check"];
@@ -41,10 +50,11 @@ export default function AuditPage() {
   };
 
   return (
-    <div>
+    <div className={styles.container}>
       <div className={styles.header}>
-        <div style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-          Immutable Security Audit Trail
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)" }}>Security Audit</h1>
+          <p style={{ color: "var(--text-muted)", fontSize: 13, fontWeight: 600 }}>Immutable infrastructure event stream.</p>
         </div>
         <button 
           className="btn btn-glass"
@@ -54,7 +64,7 @@ export default function AuditPage() {
         </button>
       </div>
 
-      <div className={styles.tableContainer}>
+      <div className={`glass-panel ${styles.tableContainer}`}>
         <table className={styles.table}>
           <thead>
             <tr>
@@ -68,20 +78,20 @@ export default function AuditPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="5" style={{ textAlign: "center", padding: "40px" }}>
-                  Fetching audit trail...
+                <td colSpan={5} style={{ textAlign: "center", padding: "100px", color: "var(--primary)", fontWeight: 700 }}>
+                  SYNCING AUDIT STREAM...
                 </td>
               </tr>
             ) : logs.length === 0 ? (
               <tr>
-                <td colSpan="5" style={{ textAlign: "center", padding: "40px" }}>
-                  No audit records found.
+                <td colSpan={5} style={{ textAlign: "center", padding: "100px", color: "var(--text-muted)" }}>
+                  No security events found.
                 </td>
               </tr>
             ) : (
               logs.map((log) => (
                 <tr key={log.id}>
-                  <td style={{ color: "var(--text-secondary)" }}>
+                  <td style={{ color: "var(--text-muted)", fontSize: 12 }}>
                     {new Date(log.timestamp * 1000).toLocaleString()}
                   </td>
                   <td>
@@ -89,7 +99,7 @@ export default function AuditPage() {
                       {log.action}
                     </span>
                   </td>
-                  <td style={{ fontWeight: 500 }}>{log.target}</td>
+                  <td style={{ fontWeight: 700 }}>{log.target}</td>
                   <td className={styles.ipCell}>{log.ip_address}</td>
                   <td className={styles.detailsText} title={log.details}>
                     {log.details}
@@ -104,24 +114,27 @@ export default function AuditPage() {
       {total > 0 && (
         <div className={styles.pagination}>
           <div className={styles.pageInfo}>
-            Showing {page * limit + 1} to {Math.min((page + 1) * limit, total)} of {total} records
+            Displaying {page * limit + 1}—{Math.min((page + 1) * limit, total)} of {total} records
           </div>
-          <button 
-            className="btn btn-glass" 
-            disabled={page === 0 || loading}
-            onClick={() => setPage(page - 1)}
-          >
-            Previous
-          </button>
-          <button 
-            className="btn btn-glass" 
-            disabled={(page + 1) * limit >= total || loading}
-            onClick={() => setPage(page + 1)}
-          >
-            Next
-          </button>
+          <div className={styles.pageActions}>
+            <button 
+              className="btn btn-glass" 
+              disabled={page === 0 || loading}
+              onClick={() => setPage(page - 1)}
+            >
+              Previous
+            </button>
+            <button 
+              className="btn btn-glass" 
+              disabled={(page + 1) * limit >= total || loading}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
 }
+

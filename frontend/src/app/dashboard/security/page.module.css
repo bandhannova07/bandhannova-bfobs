@@ -1,121 +1,136 @@
 .container {
+  padding: 0;
+  animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
   max-width: 800px;
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .card {
-  background: rgba(10, 20, 40, 0.4);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  padding: 24px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  box-shadow: var(--shadow-md);
 }
 
 .header {
   display: flex;
-  gap: 20px;
+  gap: 24px;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
 .icon {
-  font-size: 32px;
-  background: rgba(0, 210, 255, 0.1);
-  width: 60px;
-  height: 60px;
+  font-size: 40px;
+  width: 80px;
+  height: 80px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 210, 255, 0.2);
+  border: 1px solid var(--glass-stroke);
 }
 
 .title {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0;
-  color: #fff;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
 }
 
 .subtitle {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   margin-top: 4px;
+  font-weight: 500;
 }
 
 .infoBox {
-  background: rgba(0, 210, 255, 0.05);
-  border-left: 3px solid var(--neon-blue);
-  padding: 12px 16px;
-  font-size: 13px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 20px;
+  border-radius: 16px;
+  font-size: 14px;
   color: var(--text-secondary);
-  line-height: 1.5;
-  border-radius: 4px;
-  margin-bottom: 24px;
-}
-
-.infoBox strong {
-  color: #fff;
+  line-height: 1.6;
+  margin-bottom: 32px;
+  border: 1px solid var(--glass-stroke);
 }
 
 .actionSection {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 32px;
+  border-top: 1px solid var(--glass-stroke);
 }
 
 .statusInfo {
   display: flex;
-  gap: 8px;
-  font-size: 14px;
+  align-items: center;
+  gap: 12px;
+}
+
+.statusInfo span:first-child {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
 }
 
 .inactive {
-  color: var(--neon-red);
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--danger);
+  background: var(--danger-glow);
+  padding: 4px 12px;
+  border-radius: 100px;
 }
 
+/* Settings Items */
 .settingItem {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  border: 1px solid transparent;
+  transition: var(--transition);
+}
+
+.settingItem:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .settingName {
-  font-size: 14px;
-  font-weight: 500;
-  color: #ddd;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .settingDesc {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
 .toggle {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--neon-green);
-  background: rgba(0, 255, 136, 0.1);
-  padding: 4px 8px;
-  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--primary);
+  background: var(--primary-glow);
+  padding: 6px 16px;
+  border-radius: 10px;
+  cursor: pointer;
 }
 
 .toast {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
-  background: #111;
-  border: 1px solid var(--neon-blue);
-  padding: 16px 24px;
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  animation: slideIn 0.3s ease-out;
   font-size: 14px;
   z-index: 1000;
 }

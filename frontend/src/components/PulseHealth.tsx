@@ -1,17 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { fetchAPI } from "../lib/api";
 import styles from "./PulseHealth.module.css";
 
+interface Shard {
+  name: string;
+  type: string;
+  status: "healthy" | "degraded" | "offline";
+  latency: number;
+}
+
 export default function PulseHealth() {
-  const [pulse, setPulse] = useState(null);
+  const [shards, setShards] = useState<Shard[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadPulse = async () => {
     try {
       const res = await fetchAPI("/admin/health/pulse");
-      if (res.success) setPulse(res.pulse);
+      if (res.success && res.pulse) {
+        setShards(Object.values(res.pulse) as Shard[]);
+      }
     } catch (err) {
       console.error("Pulse error", err);
     } finally {
@@ -25,28 +34,28 @@ export default function PulseHealth() {
     return () => clearInterval(interval);
   }, []);
 
-  if (loading) return <div className={styles.pulseContainer}>Scanning Ecosystem Heartbeat...</div>;
-  if (!pulse) return null;
-
-  const shards = Object.values(pulse);
+  if (loading) return <div className={styles.pulseContainer}>SYNCING ECOSYSTEM HEARTBEAT...</div>;
+  if (shards.length === 0) return null;
 
   return (
-    <div className={styles.pulseContainer}>
+    <div className={`glass-panel ${styles.pulseContainer}`}>
       <div className={styles.pulseHeader}>
         <div className={styles.pulseDot}></div>
-        <span className={styles.pulseTitle}>Ecosystem Heartbeat (Live Pulse)</span>
-        <span className={styles.pulseTime}>Interval: 3m</span>
+        <span className={styles.pulseTitle}>Fleet Heartbeat (L-Pulse)</span>
+        <span className={styles.pulseTime}>Interval: 180s</span>
       </div>
       <div className={styles.pulseGrid}>
         {shards.map((shard) => (
           <div key={shard.name} className={styles.pulseItem}>
             <div className={styles.shardInfo}>
               <span className={styles.shardName}>{shard.name}</span>
-              <span className={styles.shardType}>{shard.type}</span>
+              <span className={styles.shardType}>{shard.type.toUpperCase()}</span>
             </div>
             <div className={styles.shardStatus}>
-              <span className={`${styles.statusDot} ${styles[shard.status]}`}></span>
-              <span className={styles.latency}>{(shard.latency / 1000000).toFixed(1)}ms</span>
+              <div className={`${styles.statusPill} ${styles[shard.status]}`}>
+                <span className={styles.statusDot}></span>
+                <span className={styles.latency}>{(shard.latency / 1000000).toFixed(1)}ms</span>
+              </div>
             </div>
           </div>
         ))}
@@ -54,3 +63,4 @@ export default function PulseHealth() {
     </div>
   );
 }
+

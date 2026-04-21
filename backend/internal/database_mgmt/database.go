@@ -548,13 +548,8 @@ func AddProduct(c *fiber.Ctx) error {
 
 	tx.Commit()
 
-	// 2. AUTOMATIC STORAGE PROVISIONING: Create HF Dataset for this product
-	go func(slug string) {
-		repoName := fmt.Sprintf("%s-storage", slug)
-		// We use a simplified internal call to create the repo
-		createHFRepoInternal(repoName, true)
-		logAudit("AUTO_STORAGE_CREATE", slug, ip, fmt.Sprintf("Auto-created HF storage for product: %s", repoName))
-	}(slug)
+	// Automatic storage is now handled via sub-folders in the master repository.
+	// No need to create new standalone datasets for each product.
 
 	logAudit("ADD_PRODUCT", req.Name, ip, fmt.Sprintf("Added product: %s (Client: %s)", req.Name, clientID))
 

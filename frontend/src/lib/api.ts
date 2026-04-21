@@ -63,27 +63,27 @@ export const fetchAPI = async (endpoint: string, options: RequestInit = {}): Pro
 };
 
 // Products
-export const getProducts = () => fetchAPI("/v1/admin/products");
-export const addProduct = (data: any) => fetchAPI("/v1/admin/products", { method: "POST", body: JSON.stringify(data) });
-export const updateProduct = (id: string, data: any) => fetchAPI(`/v1/admin/products/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const getProducts = () => fetchAPI("/admin/products");
+export const addProduct = (data: any) => fetchAPI("/admin/products", { method: "POST", body: JSON.stringify(data) });
+export const updateProduct = (id: string, data: any) => fetchAPI(`/admin/products/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const deleteProduct = (id: string, masterKey: string, confirmation: string) => 
-    fetchAPI(`/v1/admin/products/${id}/delete`, { 
+    fetchAPI(`/admin/products/${id}/delete`, { 
         method: "POST", 
         body: JSON.stringify({ master_key: masterKey, confirmation }) 
     });
 
 // Infrastructure (Default Shards)
-export const getShards = () => fetchAPI("/v1/admin/infrastructure/shards");
-export const addShard = (data: any) => fetchAPI("/v1/admin/infrastructure/shards", { method: "POST", body: JSON.stringify(data) });
-export const updateShard = (id: string, data: any) => fetchAPI(`/v1/admin/infrastructure/shards/${id}`, { method: "PUT", body: JSON.stringify(data) });
-export const removeShard = (id: string) => fetchAPI(`/v1/admin/infrastructure/shards/${id}`, { method: "DELETE" });
-export const queryShard = (id: string, query: string) => fetchAPI(`/v1/admin/infrastructure/shards/${id}/query`, { method: "POST", body: JSON.stringify({ query }) });
-export const clearShard = (id: string) => fetchAPI(`/v1/admin/infrastructure/shards/${id}/clear`, { method: "POST" });
+export const getShards = () => fetchAPI("/admin/infrastructure/shards");
+export const addShard = (data: any) => fetchAPI("/admin/infrastructure/shards", { method: "POST", body: JSON.stringify(data) });
+export const updateShard = (id: string, data: any) => fetchAPI(`/admin/infrastructure/shards/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const removeShard = (id: string) => fetchAPI(`/admin/infrastructure/shards/${id}`, { method: "DELETE" });
+export const queryShard = (id: string, query: string) => fetchAPI(`/admin/infrastructure/shards/${id}/query`, { method: "POST", body: JSON.stringify({ query }) });
+export const clearShard = (id: string) => fetchAPI(`/admin/infrastructure/shards/${id}/clear`, { method: "POST" });
 
 // Databases
-export const getDatabases = () => fetchAPI("/v1/admin/databases");
-export const addDatabase = (data: any) => fetchAPI("/v1/admin/databases", { method: "POST", body: JSON.stringify(data) });
-export const getDatabaseDetails = (slug: string) => fetchAPI(`/v1/admin/databases/${slug}`);
+export const getDatabases = () => fetchAPI("/admin/databases");
+export const addDatabase = (data: any) => fetchAPI("/admin/databases", { method: "POST", body: JSON.stringify(data) });
+export const getDatabaseDetails = (slug: string) => fetchAPI(`/admin/databases/${slug}`);
 
 // Audit
-export const getAuditLogs = () => fetchAPI("/v1/admin/audit");
+export const getAuditLogs = () => fetchAPI("/admin/audit");

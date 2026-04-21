@@ -27,10 +27,11 @@ func SetupRoutes(app *fiber.App) {
 	app.Post("/db/p/:product_slug/execute", database_mgmt.DatabaseProxyHandler)
 	app.Get("/storage/view/:product_slug/:bucket/:filename", storage_mgmt.ProxyViewFile)
 
-	v1 := app.Group("/v1", middleware.RedisRateLimiter(60, time.Minute))
+	// Main API Group (No more /v1)
+	api := app.Group("/", middleware.RedisRateLimiter(60, time.Minute))
 
 	// Cloud Storage System
-	storage := v1.Group("/storage", middleware.AdminAuthRequired())
+	storage := api.Group("/storage", middleware.AdminAuthRequired())
 	storage.Post("/upload", storage_mgmt.UploadToHuggingFace)
 	storage.Post("/create", storage_mgmt.CreateHuggingFaceRepo)
 	
@@ -41,7 +42,7 @@ func SetupRoutes(app *fiber.App) {
 	storage.Get("/p/:product_slug/b/:bucket_slug/files", storage_mgmt.ListBucketFiles)
 
 	// OAuth 2.0 / BandhanNova ID Routes
-	oauth := v1.Group("/oauth")
+	oauth := api.Group("/oauth")
 	oauth.Get("/authorize", auth_provider.Authorize)
 	oauth.Post("/token", auth_provider.Token)
 	oauth.Get("/userinfo", auth_provider.UserInfo)
@@ -50,7 +51,7 @@ func SetupRoutes(app *fiber.App) {
 	app.Get("/", system.ServeStatusPage)
 
 	// Admin Control Center (Requires Master Key HMAC)
-	adminGroup := v1.Group("/admin")
+	adminGroup := api.Group("/admin")
 	adminGroup.Post("/login", middleware.AdminLoginRateLimiter(), admin.AdminLogin)
 	admin.InitWebAuthn(adminGroup)
 
@@ -109,13 +110,13 @@ func SetupRoutes(app *fiber.App) {
 	adminAuth.Post("/products/:id/reset-oauth", database_mgmt.ResetOAuthCredentials)
 
 	// User Auth Routes
-	authGroup := v1.Group("/auth")
+	authGroup := api.Group("/auth")
 	authGroup.Post("/signup", auth.Signup)
 	authGroup.Post("/login", auth.Login)
 	authGroup.Post("/google", auth.GoogleLogin)
 
 	// Protected User Routes
-	userGroup := v1.Group("/user")
+	userGroup := api.Group("/user")
 	userGroup.Use(middleware.AuthRequired())
 	userGroup.Get("/profile", user.GetProfile)
 	userGroup.Post("/profile", user.UpdateProfile)
@@ -123,17 +124,17 @@ func SetupRoutes(app *fiber.App) {
 	userGroup.Post("/history", user.SaveChatMessage)
 
 	// AI Proxies
-	v1.Post("/ai/completions", ai.ProxyOpenRouter)      // Groq/OpenRouter Fallback
-	v1.Post("/ai/cerebras", ai.ProxyCerebras)           // High speed LLM
-	v1.Post("/ai/stt", ai.ProxySTT)                     // Groq Whisper
+	api.Post("/ai/completions", ai.ProxyOpenRouter)      // Groq/OpenRouter Fallback
+	api.Post("/ai/cerebras", ai.ProxyCerebras)           // High speed LLM
+	api.Post("/ai/stt", ai.ProxySTT)                     // Groq Whisper
 
 	// Utility APIs
-	v1.Post("/search", search.ProxyTavily)              // AI Search
-	v1.Post("/market/quote", market.ProxyTwelveData)    // Stock quotes
-	v1.Post("/email/send", email.ProxyEmailSend)        // Send emails
+	api.Post("/search", search.ProxyTavily)              // AI Search
+	api.Post("/market/quote", market.ProxyTwelveData)    // Stock quotes
+	api.Post("/email/send", email.ProxyEmailSend)        // Send emails
 
 	// Universal API Proxy Gateway (Rotation + Logging)
-	v1.All("/proxy/:provider/*", api_proxy.ProxyHandler)
+	api.All("/proxy/:provider/*", api_proxy.ProxyHandler)
 
 	// Webhooks
 	app.Post("/webhooks/resend", email.HandleEmailWebhook)

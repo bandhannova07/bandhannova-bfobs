@@ -92,6 +92,11 @@ func SetupRoutes(app *fiber.App) {
 	adminAuth.Get("/databases/:slug", database_mgmt.GetDatabaseDetails)
 	adminAuth.Get("/health/pulse", database_mgmt.GetPulseHealth)
 
+	// Infrastructure Management (Default Shards)
+	adminAuth.Get("/infrastructure/shards", database_mgmt.ListInfrastructureShards)
+	adminAuth.Post("/infrastructure/shards", database_mgmt.AddInfrastructureShard)
+	adminAuth.Delete("/infrastructure/shards/:id", database_mgmt.RemoveInfrastructureShard)
+
 	// Product Management
 	adminAuth.Get("/products", database_mgmt.ListProducts)
 	adminAuth.Get("/products/:slug", database_mgmt.GetProductDetails)

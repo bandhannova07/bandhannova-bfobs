@@ -25,13 +25,12 @@ func main() {
 	// 1. Initialize Configuration
 	config.LoadConfig()
 
-	// 2. Initialize Database Shards
+	// 2. Initialize Database Shards (Dynamic Bootstrapping)
 	err := database.InitShardRouter(
 		config.AppConfig.TursoAuthURL, config.AppConfig.TursoAuthToken,
 		config.AppConfig.TursoAnalyticsURL, config.AppConfig.TursoAnalyticsToken,
 		config.AppConfig.TursoCoreURL, config.AppConfig.TursoCoreToken,
-		config.AppConfig.TursoGlobalURLs, config.AppConfig.TursoGlobalTokens,
-		config.AppConfig.TursoUserShardURLs, config.AppConfig.TursoUserShardTokens,
+		config.AppConfig.BandhanNovaMasterKey,
 	)
 	if err != nil {
 		log.Printf("⚠️  Database Shards initialization warning: %v", err)

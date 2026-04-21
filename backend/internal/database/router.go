@@ -90,57 +90,73 @@ type ShardRouter struct {
 
 var Router *ShardRouter
 
-func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, coreURL, coreToken string, globalURLs, globalTokens, userURLs, userTokens []string) error {
+func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, coreURL, coreToken string, masterKey string) error {
 	router := &ShardRouter{}
 	var err error
 
-	if authURL != "" {
-		router.authDB, err = ConnectTurso(authURL, authToken)
-		if err != nil {
-			log.Printf("⚠️ Auth shard connection failed: %v", err)
-		}
-	}
-
-	if analyticsURL != "" {
-		router.analyticsDB, err = ConnectTurso(analyticsURL, analyticsToken)
-		if err != nil {
-			log.Printf("⚠️ Analytics shard connection failed: %v", err)
-		}
-	}
-
+	// 1. Connect to Core Master (Shard 1 - The Brain)
 	if coreURL != "" {
 		router.coreMasterDB, err = ConnectTurso(coreURL, coreToken)
 		if err != nil {
 			log.Printf("⚠️ Core Master shard connection failed: %v", err)
+			return fmt.Errorf("core master connection failed: %w", err)
+		}
+		
+		// Ensure Infrastructure Schema exists
+		if err := InitInfrastructureSchema(router.coreMasterDB); err != nil {
+			log.Printf("⚠️ Failed to apply infrastructure schema: %v", err)
+		}
+	} else {
+		return fmt.Errorf("TURSO_CORE_URL is required for bootstrapping")
+	}
+
+	// 2. Fetch Global Manager Shards from Infrastructure Registry
+	rows, err := router.coreMasterDB.Query("SELECT id, name, type, db_url, encrypted_token FROM infrastructure_shards WHERE status = 'active'")
+	if err != nil {
+		log.Printf("⚠️ Failed to query infrastructure shards: %v", err)
+	} else {
+		defer rows.Close()
+		for rows.Next() {
+			var id, name, sType, dbURL, encrypted string
+			if err := rows.Scan(&id, &name, &sType, &dbURL, &encrypted); err != nil {
+				continue
+			}
+
+			token, err := security.Decrypt(encrypted, masterKey)
+			if err != nil {
+				log.Printf("⚠️ Failed to decrypt shard token for %s: %v", name, err)
+				continue
+			}
+
+			db, err := ConnectTurso(dbURL, token)
+			if err != nil {
+				log.Printf("⚠️ Failed to connect to shard %s: %v", name, err)
+				continue
+			}
+
+			switch sType {
+			case "global_manager":
+				router.globalManagerDBs = append(router.globalManagerDBs, db)
+			case "auth":
+				router.authDB = db
+			case "analytics":
+				router.analyticsDB = db
+			case "user":
+				router.userDBs = append(router.userDBs, db)
+			}
 		}
 	}
 
-	for i, url := range globalURLs {
-		if url == "" {
-			continue
-		}
-		db, err := ConnectTurso(url, globalTokens[i])
-		if err != nil {
-			log.Printf("⚠️ Global Manager shard %d connection failed: %v", i, err)
-			continue
-		}
-		router.globalManagerDBs = append(router.globalManagerDBs, db)
+	// 3. Fallback to Env-based Auth/Analytics if not found in Registry
+	if router.authDB == nil && authURL != "" {
+		router.authDB, _ = ConnectTurso(authURL, authToken)
+	}
+	if router.analyticsDB == nil && analyticsURL != "" {
+		router.analyticsDB, _ = ConnectTurso(analyticsURL, analyticsToken)
 	}
 
 	if len(router.globalManagerDBs) == 0 {
-		return fmt.Errorf("at least one global manager shard is required")
-	}
-
-	for i, url := range userURLs {
-		if url == "" {
-			continue
-		}
-		db, err := ConnectTurso(url, userTokens[i])
-		if err != nil {
-			log.Printf("⚠️ User shard %d connection failed: %v", i, err)
-			continue
-		}
-		router.userDBs = append(router.userDBs, db)
+		log.Println("⚠️ No Global Manager shards found in registry. System functionality will be limited.")
 	}
 
 	router.coreAuthDB = router.authDB

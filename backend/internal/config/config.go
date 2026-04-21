@@ -102,13 +102,15 @@ func LoadConfig() {
 		log.Fatal("JWT_SECRET is required and must not be the default value")
 	}
 
-	log.Printf("Config Loaded: OpenRouterKeys=%d, TavilyKeys=%d, GroqKeys=%d, CerebrasKeys=%d, TwelveDataKeys=%d, TursoUserShards=%d",
+	log.Printf("Config Loaded: OpenRouterKeys=%d, TavilyKeys=%d, GroqKeys=%d, CerebrasKeys=%d, TwelveDataKeys=%d, TursoUserShards=%d | Turso: Org=%s, TokenLen=%d",
 		len(AppConfig.OpenRouterKeys),
 		len(AppConfig.TavilyKeys),
 		len(AppConfig.GroqKeys),
 		len(AppConfig.CerebrasKeys),
 		len(AppConfig.TwelveDataKeys),
-		len(AppConfig.TursoUserShardURLs))
+		len(AppConfig.TursoUserShardURLs),
+		AppConfig.TursoOrg,
+		len(AppConfig.TursoAPIToken))
 }
 
 func getEnv(key, fallback string) string {

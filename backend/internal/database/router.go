@@ -341,3 +341,8 @@ func (sr *ShardRouter) GetAllManagedDBs() []ManagedDB {
 	}
 	return list
 }
+func (r *ShardRouter) GetAllUserDBs() []*sql.DB {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.userDBs
+}

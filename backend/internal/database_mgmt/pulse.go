@@ -2,6 +2,7 @@ package database_mgmt
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"reflect"
@@ -73,9 +74,9 @@ func checkAllShards() {
 	}
 
 	// 3. User Shards (Dynamic)
-	for i := 0; i < database.Router.GetShardCount(); i++ {
+	for i, db := range database.Router.GetAllUserDBs() {
 		name := fmt.Sprintf("User-Shard-%d", i+1)
-		checkShard(tempResults, name, "user_data", database.Router.userDBs[i])
+		checkShard(tempResults, name, "user_data", db)
 	}
 
 	// 4. Managed Product Databases

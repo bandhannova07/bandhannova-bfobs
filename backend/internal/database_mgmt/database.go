@@ -2,10 +2,8 @@ package database_mgmt
 
 import (
 	"bytes"
-	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"

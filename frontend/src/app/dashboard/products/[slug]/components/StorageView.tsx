@@ -166,9 +166,13 @@ export default function StorageView({ product }: StorageViewProps) {
 
       const data = await res.json();
       if (data.success) {
-        setUploadStatus("✅ Upload Successful!");
+        setUploadStatus("✅ Upload Successful! Syncing with HF...");
         setSelectedFile(null);
-        openBucket(activeBucket); // Refresh file list
+        // Wait 3 seconds for HF to process the commit
+        setTimeout(() => {
+          openBucket(activeBucket);
+          setUploadStatus(null);
+        }, 3000);
       } else {
         setUploadStatus("❌ Upload Failed: " + (data.message || "Unknown error"));
       }
@@ -231,7 +235,12 @@ export default function StorageView({ product }: StorageViewProps) {
           <div className={styles.explorerContent}>
             <div className={styles.explorerHeader}>
               <h3>📂 {activeBucket.name} <small style={{ opacity: 0.5, fontSize: "12px" }}>/{activeBucket.slug}</small></h3>
-              <button className="btn btn-secondary" onClick={() => setActiveBucket(null)}>Close</button>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button className="btn btn-secondary" style={{ background: "rgba(0,163,255,0.1)", color: "var(--primary)" }} onClick={() => openBucket(activeBucket)}>
+                  🔄 Refresh
+                </button>
+                <button className="btn btn-secondary" onClick={() => setActiveBucket(null)}>Close</button>
+              </div>
             </div>
 
             <div className={styles.explorerContent} style={{ padding: "32px", background: "rgba(255,255,255,0.01)" }}>

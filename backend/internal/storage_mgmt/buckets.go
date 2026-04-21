@@ -167,7 +167,8 @@ func ListBucketFiles(c *fiber.Ctx) error {
 	}
 
 	// HF Tree API: GET https://huggingface.co/api/datasets/{repo}/tree/main/{path}
-	apiUrl := fmt.Sprintf("https://huggingface.co/api/datasets/%s/tree/main/%s/%s", repo, productSlug, bucketSlug)
+	// Added timestamp for cache busting
+	apiUrl := fmt.Sprintf("https://huggingface.co/api/datasets/%s/tree/main/%s/%s?t=%d", repo, productSlug, bucketSlug, time.Now().Unix())
 
 	req, err := http.NewRequest("GET", apiUrl, nil)
 	if err != nil {

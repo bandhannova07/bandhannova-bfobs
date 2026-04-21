@@ -1,11 +1,14 @@
 package database_mgmt
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"reflect"
 	"sync"
 	"time"
 
+	"github.com/bandhannova/api-hunter/internal/cache"
 	"github.com/bandhannova/api-hunter/internal/database"
 )
 
@@ -53,7 +56,7 @@ func checkAllShards() {
 
 	// 2. Check User Shards
 	for i := 0; i < database.Router.GetShardCount(); i++ {
-		name := "User Shard " + string(rune(48+i))
+		name := fmt.Sprintf("User Shard %d", i)
 		checkShard(tempResults, name, "user", database.Router.GetUserDB(name))
 	}
 
@@ -62,6 +65,9 @@ func checkAllShards() {
 	for _, mdb := range managedDBs {
 		checkShard(tempResults, mdb.Name, "managed", mdb.DB)
 	}
+
+	// 4. Check Redis Cache
+	checkRedisStatus(tempResults)
 
 	// Update Global Map
 	pulseMu.Lock()
@@ -112,3 +118,31 @@ func GetPulseStatus() map[string]ShardHealth {
 	defer pulseMu.RUnlock()
 	return PulseResults
 }
+
+func checkRedisStatus(results map[string]ShardHealth) {
+	if cache.RedisClient == nil {
+		results["Upstash Redis"] = ShardHealth{Name: "Upstash Redis", Type: "cache", Status: "offline", LastCheck: time.Now(), Error: "Redis not configured"}
+		return
+	}
+
+	start := time.Now()
+	err := cache.RedisClient.Ping(context.Background()).Err()
+	latency := time.Since(start)
+
+	status := "healthy"
+	errMsg := ""
+	if err != nil {
+		status = "offline"
+		errMsg = err.Error()
+	}
+
+	results["Upstash Redis"] = ShardHealth{
+		Name:      "Upstash Redis",
+		Type:      "cache",
+		Status:    status,
+		Latency:   latency,
+		LastCheck: time.Now(),
+		Error:     errMsg,
+	}
+}
+

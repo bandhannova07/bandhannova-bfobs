@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS managed_products (
     app_url TEXT,
     description TEXT,
     icon TEXT,
+    master_schema TEXT,
     status TEXT DEFAULT 'active',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
@@ -136,10 +137,17 @@ func InitGlobalManagerSchema(db *sql.DB) error {
 	_, _ = db.Exec("ALTER TABLE api_cards ADD COLUMN limit_rpd INTEGER DEFAULT 0")
 	_, _ = db.Exec("ALTER TABLE api_cards ADD COLUMN limit_rpmonth INTEGER DEFAULT 0")
 	_, _ = db.Exec("ALTER TABLE api_cards ADD COLUMN limit_concurrent INTEGER DEFAULT 0")
+	_, _ = db.Exec("ALTER TABLE managed_products ADD COLUMN master_schema TEXT")
 
 	// Ensure managed_api_keys has new columns
 	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN card_id TEXT")
 	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN is_deleted INTEGER DEFAULT 0")
+
+	// ─── Performance Indexes ─────────────────────────────────────────────────────
+	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_usage_logs_card_ts ON api_usage_logs(card_id, timestamp)")
+	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_usage_logs_key_ts ON api_usage_logs(key_id, timestamp)")
+	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_keys_card_status ON managed_api_keys(card_id, status, is_deleted)")
+	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_cards_section ON api_cards(section_id, is_deleted)")
 
 	// Ensure "Unused APIs" section exists
 	unusedID := "unused"
@@ -169,6 +177,30 @@ func InitGlobalManagerSchema(db *sql.DB) error {
 		`, c.ID, freeSectionID, c.Name, c.Icon, c.Endpoint, 0)
 	}
 
+	// ─── Seed "G4F Free Proxies" section ─────────────────────────────────────────
+	g4fSectionID := "g4f-proxies"
+	_, _ = db.Exec("INSERT OR IGNORE INTO api_sections (id, name, created_at) VALUES (?, ?, ?)", g4fSectionID, "G4F Free Proxies", 0)
+
+	g4fCards := []struct {
+		ID       string
+		Name     string
+		Icon     string
+		Endpoint string
+	}{
+		{"g4f-groq", "Groq (Free)", "⚡", "/chat/completions"},
+		{"g4f-gemini", "Gemini (Free)", "♊", "/chat/completions"},
+		{"g4f-pollinations", "Pollinations (Free)", "🌸", "/chat/completions"},
+	}
+
+	for _, c := range g4fCards {
+		_, _ = db.Exec(`
+			INSERT OR IGNORE INTO api_cards
+			(id, section_id, name, icon, endpoint_url, platform_type, created_at)
+			VALUES (?, ?, ?, ?, ?, 'openai_compatible', ?)
+		`, c.ID, g4fSectionID, c.Name, c.Icon, c.Endpoint, 0)
+	}
+
 	log.Println("✅ API Management migrations completed")
 	return nil
 }
+

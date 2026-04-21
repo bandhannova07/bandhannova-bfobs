@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bandhannova/api-hunter/internal/cache"
 	"github.com/bandhannova/api-hunter/internal/config"
 	"github.com/bandhannova/api-hunter/internal/database"
 	"github.com/bandhannova/api-hunter/internal/modules/admin"
@@ -110,11 +111,21 @@ func ListCards(c *fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not ready"})
 	}
 	sectionID := c.Query("section_id")
-	query := "SELECT id, section_id, name, icon, endpoint_url, platform_type, limit_rps, limit_rpm, limit_rph, limit_rpd, limit_rpmonth, limit_concurrent, is_deleted, created_at FROM api_cards WHERE is_deleted = 0"
+	query := `
+		SELECT c.id, c.section_id, c.name, c.icon, c.endpoint_url, c.platform_type, 
+		       c.limit_rps, c.limit_rpm, c.limit_rph, c.limit_rpd, c.limit_rpmonth, c.limit_concurrent, 
+		       c.is_deleted, c.created_at,
+		       COALESCE(kc.cnt, 0) AS key_count,
+		       COALESCE(lc.cnt, 0) AS total_req
+		FROM api_cards c
+		LEFT JOIN (SELECT card_id, COUNT(*) as cnt FROM managed_api_keys WHERE is_deleted = 0 GROUP BY card_id) kc ON kc.card_id = c.id
+		LEFT JOIN (SELECT card_id, COUNT(*) as cnt FROM api_usage_logs GROUP BY card_id) lc ON lc.card_id = c.id
+		WHERE c.is_deleted = 0
+	`
 	var args []interface{}
 
 	if sectionID != "" {
-		query += " AND section_id = ?"
+		query += " AND c.section_id = ?"
 		args = append(args, sectionID)
 	}
 
@@ -143,18 +154,14 @@ func ListCards(c *fiber.Ctx) error {
 			&cd.LimitConcurrent,
 			&isDel, 
 			&cd.CreatedAt,
+			&cd.KeyCount,
+			&cd.TotalReq,
 		)
 		if err != nil {
 			log.Printf("⚠️  Error scanning card: %v", err)
 			continue
 		}
 		cd.IsDeleted = isDel == 1
-		
-		// Get key count
-		_ = database.Router.GetGlobalManagerDB().QueryRow("SELECT COUNT(*) FROM managed_api_keys WHERE card_id = ? AND is_deleted = 0", cd.ID).Scan(&cd.KeyCount)
-		
-		// Get total usage from logs
-		_ = database.Router.GetGlobalManagerDB().QueryRow("SELECT COUNT(*) FROM api_usage_logs WHERE card_id = ?", cd.ID).Scan(&cd.TotalReq)
 
 		cards = append(cards, cd)
 	}
@@ -221,8 +228,8 @@ func UpdateCard(c *fiber.Ctx) error {
 		WHERE id = ?
 	`, body.Name, body.Icon, body.EndpointURL, body.PlatformType, body.LimitRPS, body.LimitRPM, body.LimitRPH, body.LimitRPD, body.LimitRPMonth, body.LimitConcurrent, id)
 
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to update card"})
+	if err == nil {
+		invalidateCardCache(id)
 	}
 	return c.JSON(fiber.Map{"success": true})
 }
@@ -328,6 +335,7 @@ func AddKey(c *fiber.Ctx) error {
 			`, id, body.CardID, body.Provider, encrypted, label, body.APIURL, useURLInt, now, now)
 		}
 		tx.Commit()
+		invalidateCardCache(body.CardID)
 		return c.JSON(fiber.Map{"success": true, "message": "Bulk keys saved"})
 	}
 
@@ -346,6 +354,7 @@ func AddKey(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to save key"})
 	}
+	invalidateCardCache(body.CardID)
 	return c.JSON(fiber.Map{"success": true, "id": id})
 }
 
@@ -374,6 +383,16 @@ func DeleteAPIItem(c *fiber.Ctx) error {
 	}
 
 	admin.LogAudit("SOFT_DELETE_API", itemType, ip, fmt.Sprintf("Moved %s %s to Unused", itemType, id))
+	
+	// If it's a key, we need to find its card_id to invalidate cache
+	if itemType == "key" {
+		var cid string
+		_ = database.Router.GetGlobalManagerDB().QueryRow("SELECT card_id FROM managed_api_keys WHERE id = ?", id).Scan(&cid)
+		if cid != "" { invalidateCardCache(cid) }
+	} else if itemType == "card" {
+		invalidateCardCache(id)
+	}
+
 	return c.JSON(fiber.Map{"success": true})
 }
 
@@ -430,5 +449,22 @@ func PermanentDelete(c *fiber.Ctx) error {
 	}
 
 	admin.LogAudit("PERM_DELETE_API", itemType, ip, fmt.Sprintf("Permanently deleted %s %s", itemType, id))
+
+	if itemType == "card" {
+		invalidateCardCache(id)
+	} else if itemType == "key" {
+		// Key might already be soft-deleted, but we'll try to find its card_id anyway
+		var cid string
+		_ = database.Router.GetGlobalManagerDB().QueryRow("SELECT card_id FROM managed_api_keys WHERE id = ?", id).Scan(&cid)
+		if cid != "" { invalidateCardCache(cid) }
+	}
+
 	return c.JSON(fiber.Map{"success": true})
 }
+
+// invalidateCardCache removes card metadata and keys from Redis
+func invalidateCardCache(cardID string) {
+	_ = cache.Del("card_data:" + cardID)
+	_ = cache.Del("card_keys:" + cardID)
+}
+

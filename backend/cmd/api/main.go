@@ -4,9 +4,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/bandhannova/api-hunter/internal/cache"
 	"github.com/bandhannova/api-hunter/internal/config"
 	"github.com/bandhannova/api-hunter/internal/database"
-	"github.com/bandhannova/api-hunter/internal/ex-db/cache"
 	"github.com/bandhannova/api-hunter/internal/modules/admin"
 	"github.com/bandhannova/api-hunter/internal/modules/ai"
 	"github.com/bandhannova/api-hunter/internal/modules/database_mgmt"
@@ -25,7 +25,7 @@ func main() {
 	// 1. Initialize Configuration
 	config.LoadConfig()
 
-	// 2. Initialize Core Subsystems
+	// 2. Initialize Database Shards
 	err := database.InitShardRouter(
 		config.AppConfig.TursoAuthURL, config.AppConfig.TursoAuthToken,
 		config.AppConfig.TursoAnalyticsURL, config.AppConfig.TursoAnalyticsToken,
@@ -36,15 +36,12 @@ func main() {
 		log.Printf("⚠️  Database Shards initialization warning: %v", err)
 	}
 
-	// 3. Run Schema Migrations
+	// 3. Initialize Cache (Upstash Redis)
+	cache.InitRedis()
+
+	// 4. Run Schema Migrations
 	database.RunMigrations()
 
-	// 4. Initialize Redis Cache (Optional but recommended)
-	if config.AppConfig.RedisURL != "" {
-		if err := cache.InitRedis(config.AppConfig.RedisURL); err != nil {
-			log.Printf("⚠️  Redis initialization warning: %v", err)
-		}
-	}
 
 	admin.InitAdminHandlers()
 	ai.InitAIHandlers()
@@ -66,6 +63,23 @@ func main() {
 		database_mgmt.StartPulseWorker(60 * time.Second)
 		// Start Anti-Sleep System (Every 3 minutes)
 		system.StartAntiSleepWorker(3 * time.Minute)
+	}()
+
+	// Log Cleanup Worker (Runs daily, deletes logs older than 30 days)
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		for range ticker.C {
+			if database.Router != nil && database.Router.GetGlobalManagerDB() != nil {
+				cutoff := time.Now().Unix() - (30 * 24 * 3600)
+				result, err := database.Router.GetGlobalManagerDB().Exec(
+					"DELETE FROM api_usage_logs WHERE timestamp < ?", cutoff,
+				)
+				if err == nil {
+					deleted, _ := result.RowsAffected()
+					log.Printf("🧹 Log Cleanup: Removed %d entries older than 30 days", deleted)
+				}
+			}
+		}
 	}()
 
 	// 4. Initialize Fiber App

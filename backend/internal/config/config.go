@@ -37,6 +37,8 @@ type Config struct {
 	SupabaseURL          string
 	SupabaseJWTSecret    string
 	PublicURL            string
+	TursoOrg             string
+	TursoAPIToken        string
 }
 
 var AppConfig Config
@@ -75,6 +77,8 @@ func LoadConfig() {
 		SupabaseURL:          getEnv("SUPABASE_URL", ""),
 		SupabaseJWTSecret:    getEnv("SUPABASE_JWT_SECRET", ""),
 		PublicURL:            getEnv("PUBLIC_URL", ""),
+		TursoOrg:             getEnv("TURSO_ORG", ""),
+		TursoAPIToken:        getEnv("TURSO_API_TOKEN", ""),
 	}
 
 	// Fallback to internal registry if keys are missing but master key exists
@@ -222,11 +226,6 @@ func decryptInternal(encrypted, master string) []string {
 	return result
 }
 
-// SyncConfigFromDB loads all managed keys and databases from the Global Manager shard
-// This allows the system to run with minimal environment variables.
-func SyncConfigFromDB() error {
-	return nil
-}
 
 // UpdateKeys updates the in-memory keys from the database records
 func UpdateKeys(provider string, keys []string) {

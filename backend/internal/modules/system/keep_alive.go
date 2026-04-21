@@ -12,10 +12,7 @@ import (
 func StartAntiSleepWorker(interval time.Duration) {
 	// If no public URL is provided, we can't self-ping effectively via internet
 	// but we can at least log that it's waiting for one.
-	publicURL := config.AppConfig.SupabaseURL // Using this as a placeholder or we can add a new config field
-	
-	// Better yet, let's look for a specific PUBLIC_URL env var
-	// For now, if it's empty, we'll ping localhost as a fallback (though public is better)
+	publicURL := config.AppConfig.PublicURL
 	
 	log.Printf("🛡️  Anti-Sleep System activated (Interval: %v)", interval)
 	ticker := time.NewTicker(interval)

@@ -511,89 +511,111 @@ type DashboardData struct {
 
 // GetAdminStatus returns comprehensive system status for the admin dashboard
 func GetAdminStatus(c *fiber.Ctx) error {
-	var allKeys []proxy.KeyMetadata
-	
-	// Safely collect keys from all managers
-	kms := []*proxy.KeyManager{
-		ai.OpenRouterKM, search.TavilyKM, ai.GroqKM, 
-		email.ResendKM, ai.CerebrasKM, market.TwelveDataKM,
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return c.Status(503).JSON(fiber.Map{"error": true, "message": "Database not connected"})
 	}
-	
-	for _, km := range kms {
-		if km != nil {
-			allKeys = append(allKeys, km.GetKeys()...)
-		}
-	}
+	db := database.Router.GetGlobalManagerDB()
 
-	data := DashboardData{
-		Keys: allKeys,
-	}
+	// ─── Key Stats ───────────────────────────────────────────────────────────
+	var totalKeys, activeKeys int
+	_ = db.QueryRow("SELECT COUNT(*) FROM managed_api_keys WHERE is_deleted = 0").Scan(&totalKeys)
+	_ = db.QueryRow("SELECT COUNT(*) FROM managed_api_keys WHERE is_deleted = 0 AND status = 'active'").Scan(&activeKeys)
 
-	proxy.LogsMutex.Lock()
-	data.Logs = make([]proxy.RequestLog, len(proxy.GlobalRequestLogs))
-	copy(data.Logs, proxy.GlobalRequestLogs)
-	proxy.LogsMutex.Unlock()
+	// ─── Request Stats (from api_usage_logs) ─────────────────────────────────
+	var totalReqs, successReqs, failedReqs int
+	_ = db.QueryRow("SELECT COUNT(*) FROM api_usage_logs").Scan(&totalReqs)
+	_ = db.QueryRow("SELECT COUNT(*) FROM api_usage_logs WHERE status_code >= 200 AND status_code < 400").Scan(&successReqs)
+	failedReqs = totalReqs - successReqs
 
-	for _, logEntry := range data.Logs {
-		if logEntry.StatusCode >= 200 && logEntry.StatusCode < 400 {
-			data.Timeline.Success++
-		} else {
-			data.Timeline.Failed++
-		}
-	}
+	// ─── Average Latency ─────────────────────────────────────────────────────
+	var avgLatency float64
+	_ = db.QueryRow("SELECT COALESCE(AVG(latency_ms), 0) FROM api_usage_logs ORDER BY timestamp DESC LIMIT 100").Scan(&avgLatency)
 
-	// Shard health
-	data.Shards = []ShardStatus{}
-	if database.Router != nil {
-		data.Shards = append(data.Shards, getShardMetrics(database.Router.GetAuthDB(), "Auth Shard", "auth", []string{"users", "sessions"}))
-		data.Shards = append(data.Shards, getShardMetrics(database.Router.GetAnalyticsDB(), "Analytics Shard", "analytics", []string{"request_logs", "inbound_emails", "outbound_emails"}))
-		data.Shards = append(data.Shards, getShardMetrics(database.Router.GetGlobalManagerDB(), "Global Shard", "global", []string{"app_config", "feature_flags", "managed_api_keys", "admin_audit_log"}))
-		
-		shardCount := database.Router.GetShardCount()
-		for i := 0; i < shardCount; i++ {
-			shardName := fmt.Sprintf("User Shard %d", i)
-			// Pass a dummy ID to get the specific shard if possible, or iterate differently
-			// For now, let's just get the count and report
-			db := database.Router.GetUserDB(fmt.Sprintf("internal-status-check-%d", i))
-			data.Shards = append(data.Shards, getShardMetrics(db, shardName, "user", []string{"user_data", "chat_history", "saved_items"}))
-		}
-	}
+	// ─── Card Stats ──────────────────────────────────────────────────────────
+	var totalCards, totalSections int
+	_ = db.QueryRow("SELECT COUNT(*) FROM api_cards WHERE is_deleted = 0").Scan(&totalCards)
+	_ = db.QueryRow("SELECT COUNT(*) FROM api_sections").Scan(&totalSections)
 
-	// Email data
-	if database.Router != nil && database.Router.GetAnalyticsDB() != nil {
-		rows, err := database.Router.GetAnalyticsDB().Query(
-			"SELECT from_email, subject, timestamp FROM inbound_emails ORDER BY timestamp DESC LIMIT 20",
-		)
-		if err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var from, sub string
-				var ts int64
-				if err := rows.Scan(&from, &sub, &ts); err == nil {
-					data.Emails = append(data.Emails, fiber.Map{
-						"from":      from,
-						"subject":   sub,
-						"timestamp": ts,
-					})
-				}
+	// ─── Recent Logs ─────────────────────────────────────────────────────────
+	rows, err := db.Query(`
+		SELECT l.id, l.method, l.path, l.status_code, l.latency_ms, l.ip_address, l.timestamp, c.name
+		FROM api_usage_logs l
+		LEFT JOIN api_cards c ON l.card_id = c.id
+		ORDER BY l.timestamp DESC
+		LIMIT 20
+	`)
+	var recentLogs []fiber.Map
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id, method, path, ip, cardName string
+			var status, latency int
+			var ts int64
+			if rows.Scan(&id, &method, &path, &status, &latency, &ip, &ts, &cardName) == nil {
+				recentLogs = append(recentLogs, fiber.Map{
+					"id": id, "method": method, "path": path, "status": status,
+					"latency": latency, "ip": ip, "timestamp": ts, "card_name": cardName,
+				})
 			}
 		}
 	}
+	if recentLogs == nil { recentLogs = []fiber.Map{} }
 
-	if data.Emails == nil {
-		data.Emails = []fiber.Map{}
+	// ─── Top Providers (by request volume) ───────────────────────────────────
+	provRows, err := db.Query(`
+		SELECT c.name, c.icon, COUNT(l.id) as req_count,
+			   SUM(CASE WHEN l.status_code >= 200 AND l.status_code < 400 THEN 1 ELSE 0 END) as success_count,
+			   (SELECT COUNT(*) FROM managed_api_keys WHERE card_id = c.id AND is_deleted = 0 AND status = 'active') as key_count
+		FROM api_cards c
+		LEFT JOIN api_usage_logs l ON l.card_id = c.id
+		WHERE c.is_deleted = 0
+		GROUP BY c.id
+		ORDER BY req_count DESC
+		LIMIT 10
+	`)
+	var providers []fiber.Map
+	if err == nil {
+		defer provRows.Close()
+		for provRows.Next() {
+			var name, icon string
+			var reqCount, successCount, keyCount int
+			if provRows.Scan(&name, &icon, &reqCount, &successCount, &keyCount) == nil {
+				providers = append(providers, fiber.Map{
+					"name": name, "icon": icon, "requests": reqCount,
+					"success": successCount, "keys": keyCount,
+				})
+			}
+		}
 	}
-	if data.Keys == nil {
-		data.Keys = []proxy.KeyMetadata{}
-	}
-	if data.Logs == nil {
-		data.Logs = []proxy.RequestLog{}
-	}
-	if data.Shards == nil {
-		data.Shards = []ShardStatus{}
+	if providers == nil { providers = []fiber.Map{} }
+
+	// ─── Shard Health ────────────────────────────────────────────────────────
+	shards := []ShardStatus{}
+	shards = append(shards, getShardMetrics(database.Router.GetAuthDB(), "Auth Shard", "auth", []string{"users", "sessions"}))
+	shards = append(shards, getShardMetrics(database.Router.GetAnalyticsDB(), "Analytics Shard", "analytics", []string{"request_logs", "inbound_emails", "outbound_emails"}))
+	shards = append(shards, getShardMetrics(db, "Global Shard", "global", []string{"managed_api_keys", "api_cards", "api_usage_logs", "admin_audit_log"}))
+	for i := 0; i < database.Router.GetShardCount(); i++ {
+		shardName := fmt.Sprintf("User Shard %d", i)
+		sdb := database.Router.GetUserDB(fmt.Sprintf("internal-status-check-%d", i))
+		shards = append(shards, getShardMetrics(sdb, shardName, "user", []string{"user_data", "chat_history", "saved_items"}))
 	}
 
-	return c.JSON(data)
+	return c.JSON(fiber.Map{
+		"success": true,
+		"stats": fiber.Map{
+			"total_requests":  totalReqs,
+			"success_count":   successReqs,
+			"failed_count":    failedReqs,
+			"avg_latency_ms":  avgLatency,
+			"total_keys":      totalKeys,
+			"active_keys":     activeKeys,
+			"total_cards":     totalCards,
+			"total_sections":  totalSections,
+		},
+		"recent_logs": recentLogs,
+		"providers":   providers,
+		"shards":      shards,
+	})
 }
 
 func getShardMetrics(db *sql.DB, name, shardType string, tables []string) ShardStatus {

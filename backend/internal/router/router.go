@@ -22,7 +22,8 @@ import (
 // SetupRoutes configures all routes for the BFOBS Gateway
 func SetupRoutes(app *fiber.App) {
 	// Ecosystem Execution URLs (/{section}/{card}/execute) - Clean root URLs (Priority)
-	app.Post("/:section/:card/execute", api_proxy.EcosystemProxyHandler)
+	// Virtual Database Gateway (The "No Turso Relation" layer)
+	app.Post("/db/p/:product_slug/execute", database_mgmt.DatabaseProxyHandler)
 
 	v1 := app.Group("/v1", middleware.RedisRateLimiter(60, time.Minute))
 
@@ -67,7 +68,11 @@ func SetupRoutes(app *fiber.App) {
 	adminAuth.Delete("/keys/:id", admin.DeleteManagedKey)
 	adminAuth.Post("/keys/:id/check", admin.CheckKeyHealth)
 
-	// Admin Database Management
+	// Admin Database Management (Supabase-style DB Lab)
+	adminAuth.Get("/db/status", admin.ListAllDatabases)
+	adminAuth.Post("/db/provision", admin.ProvisionDatabase)
+	adminAuth.Post("/db/execute", admin.ExecuteSQLHandler)
+	adminAuth.Post("/db/execute-bulk", admin.BulkExecuteSQLHandler)
 	adminAuth.Get("/databases", database_mgmt.ListDatabases)
 	adminAuth.Post("/databases", database_mgmt.AddDatabase)
 	adminAuth.Get("/databases/:slug", database_mgmt.GetDatabaseDetails)

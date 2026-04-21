@@ -271,7 +271,18 @@ func AddDatabase(c *fiber.Ctx) error {
 	// Hot Reload
 	go ReloadManagedDatabases()
 
-	return c.JSON(fiber.Map{"success": true, "message": "Database added successfully", "slug": slug})
+	// 6. AUTO-SYNC: Run Master Schema if exists for the product
+	if req.ProductID != "" {
+		var schema sql.NullString
+		database.Router.GetGlobalManagerDB().QueryRow("SELECT master_schema FROM managed_products WHERE id = ?", req.ProductID).Scan(&schema)
+		if schema.Valid && schema.String != "" {
+			// Small delay to ensure reload finished
+			time.Sleep(1 * time.Second)
+			ExecuteSQL(slug, schema.String)
+		}
+	}
+
+	return c.JSON(fiber.Map{"success": true, "message": "Database added and synchronized", "slug": slug})
 }
 
 // HarmonizeNames renames all existing database records to the indexed format

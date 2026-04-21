@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/bandhannova/api-hunter/internal/cache"
 	"github.com/bandhannova/api-hunter/internal/config"
 	"github.com/gofiber/fiber/v2"
 )
@@ -73,19 +73,8 @@ func ValidateAdminToken(token string, masterKey string) bool {
 }
 
 // ═══════════════════════════════════════════════
-//  Rate Limiter (Sliding Window, Per-IP)
+//  Rate Limiter (Redis-based, Per-IP)
 // ═══════════════════════════════════════════════
-
-type rateLimitEntry struct {
-	timestamps []int64
-	banUntil   int64
-	failCount  int
-}
-
-var (
-	rateLimitStore = make(map[string]*rateLimitEntry)
-	rateLimitMu    sync.Mutex
-)
 
 func getClientIP(c *fiber.Ctx) string {
 	// Check common proxy headers
@@ -98,87 +87,48 @@ func getClientIP(c *fiber.Ctx) string {
 	return c.IP()
 }
 
-func checkRateLimit(ip string, limit int) bool {
-	rateLimitMu.Lock()
-	defer rateLimitMu.Unlock()
-
-	entry, exists := rateLimitStore[ip]
-	if !exists {
-		entry = &rateLimitEntry{}
-		rateLimitStore[ip] = entry
+func checkRateLimit(key string, limit int) bool {
+	// Use Redis Incr for sliding window (simplified to fixed window for performance)
+	count, err := cache.Incr("ratelimit:"+key, time.Duration(RateLimitWindowSeconds)*time.Second)
+	if err != nil {
+		return true // Fallback to allow if Redis is down
 	}
-
-	now := time.Now().Unix()
-
-	// Check auto-ban
-	if entry.banUntil > now {
-		return false
-	}
-
-	// Clean old timestamps outside window
-	windowStart := now - RateLimitWindowSeconds
-	var valid []int64
-	for _, ts := range entry.timestamps {
-		if ts > windowStart {
-			valid = append(valid, ts)
-		}
-	}
-	entry.timestamps = valid
-
-	// Check limit
-	if len(entry.timestamps) >= limit {
-		return false
-	}
-
-	entry.timestamps = append(entry.timestamps, now)
-	return true
+	return int(count) <= limit
 }
 
 func recordLoginFailure(ip string) (remaining int, banned bool) {
-	rateLimitMu.Lock()
-	defer rateLimitMu.Unlock()
+	key := "failcount:" + ip
+	count, _ := cache.Incr(key, 24*time.Hour) // Keep count for 24h
 
-	entry, exists := rateLimitStore[ip]
-	if !exists {
-		entry = &rateLimitEntry{}
-		rateLimitStore[ip] = entry
-	}
-
-	entry.failCount++
-
-	if entry.failCount >= AutoBanThreshold {
-		entry.banUntil = time.Now().Add(AutoBanDuration).Unix()
+	if int(count) >= AutoBanThreshold {
+		// Set ban in Redis
+		_ = cache.Set("ban:"+ip, time.Now().Add(AutoBanDuration).Unix(), AutoBanDuration)
 		return 0, true
 	}
 
-	return AutoBanThreshold - entry.failCount, false
+	return AutoBanThreshold - int(count), false
 }
 
 func resetLoginFailures(ip string) {
-	rateLimitMu.Lock()
-	defer rateLimitMu.Unlock()
-
-	if entry, exists := rateLimitStore[ip]; exists {
-		entry.failCount = 0
-		entry.banUntil = 0
-	}
+	_ = cache.Del("failcount:" + ip)
+	_ = cache.Del("ban:" + ip)
 }
 
 func getBanRemaining(ip string) int64 {
-	rateLimitMu.Lock()
-	defer rateLimitMu.Unlock()
-
-	entry, exists := rateLimitStore[ip]
+	var banUntil int64
+	exists, _ := cache.Get("ban:"+ip, &banUntil)
 	if !exists {
 		return 0
 	}
 
-	remaining := entry.banUntil - time.Now().Unix()
+	remaining := banUntil - time.Now().Unix()
 	if remaining < 0 {
+		_ = cache.Del("ban:" + ip)
 		return 0
 	}
 	return remaining
 }
+
 
 // ═══════════════════════════════════════════════
 //  Middleware Handlers

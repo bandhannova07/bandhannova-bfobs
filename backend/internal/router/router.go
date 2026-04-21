@@ -76,6 +76,7 @@ func SetupRoutes(app *fiber.App) {
 	// Admin Database Management (Supabase-style DB Lab)
 	adminAuth.Get("/db/status", admin.ListAllDatabases)
 	adminAuth.Post("/db/provision", admin.ProvisionDatabase)
+	adminAuth.Post("/db/remove/:id", database_mgmt.RemoveDatabase)
 	adminAuth.Post("/db/execute", admin.ExecuteSQLHandler)
 	adminAuth.Post("/db/execute-bulk", admin.BulkExecuteSQLHandler)
 	adminAuth.Get("/databases", database_mgmt.ListDatabases)

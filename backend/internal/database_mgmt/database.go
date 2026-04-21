@@ -470,6 +470,31 @@ func GetProductDetails(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "product": p})
 }
 
+// RemoveDatabase deletes a database shard from the system
+func RemoveDatabase(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "ID is required"})
+	}
+
+	ip := c.IP()
+	tx, err := database.Router.GetGlobalManagerDB().Begin()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Transaction failed"})
+	}
+
+	_, err = tx.Exec("DELETE FROM managed_databases WHERE id = ?", id)
+	if err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to delete shard"})
+	}
+
+	tx.Commit()
+	logAudit("REMOVE_SHARD", id, ip, fmt.Sprintf("Removed database shard ID: %s", id))
+
+	return c.JSON(fiber.Map{"success": true, "message": "Shard decommissioned successfully"})
+}
+
 // AddProduct handles creating a new product with automated OAuth and Storage provisioning
 type AddProductRequest struct {
 	Name        string `json:"name"`

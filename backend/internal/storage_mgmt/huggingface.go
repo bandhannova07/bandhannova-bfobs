@@ -2,10 +2,10 @@ package storage_mgmt
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"time"
 
@@ -68,7 +68,18 @@ func CreateHuggingFaceRepo(c *fiber.Ctx) error {
 	})
 }
 
-// UploadToHuggingFace sends a file to a Hugging Face repository using the new Commit API
+type CommitOperation struct {
+	Operation string `json:"operation"`
+	Path      string `json:"path"`
+	Content   string `json:"content"`
+}
+
+type CommitPayload struct {
+	Summary    string            `json:"summary"`
+	Operations []CommitOperation `json:"operations"`
+}
+
+// UploadToHuggingFace sends a file to a Hugging Face repository using the JSON Commit API
 func UploadToHuggingFace(c *fiber.Ctx) error {
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -83,48 +94,47 @@ func UploadToHuggingFace(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Hugging Face storage not configured"})
 	}
 
-	// 2. Open the uploaded file
+	// 2. Read and Base64 encode the file
 	src, err := file.Open()
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to open file"})
 	}
 	defer src.Close()
 
-	// 3. Prepare Multipart Form for HF Commit API
+	fileBytes, err := io.ReadAll(src)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to read file"})
+	}
+	encodedContent := base64.StdEncoding.EncodeToString(fileBytes)
+
+	// 3. Prepare JSON Payload for HF Commit API
 	productSlug := c.FormValue("product_slug", "general")
 	fileName := fmt.Sprintf("%d-%s", time.Now().Unix(), file.Filename)
 	hfPath := fmt.Sprintf("%s/uploads/%s", productSlug, fileName)
 
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	// Add operations JSON
-	// The API expects an array of operations. We use addFile to upload.
-	ops := fmt.Sprintf(`[{"operation": "addFile", "pathInRepo": "%s"}]`, hfPath)
-	_ = writer.WriteField("operations", ops)
-	_ = writer.WriteField("commitMessage", fmt.Sprintf("Upload %s via BandhanNova API Hunter", fileName))
-
-	// Add file content
-	part, err := writer.CreateFormFile("file", fileName)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create form file"})
+	payload := CommitPayload{
+		Summary: fmt.Sprintf("Upload %s via BandhanNova API Hunter", fileName),
+		Operations: []CommitOperation{
+			{
+				Operation: "add",
+				Path:      hfPath,
+				Content:   encodedContent,
+			},
+		},
 	}
-	if _, err := io.Copy(part, src); err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to copy file content"})
-	}
-	writer.Close()
+
+	jsonPayload, _ := json.Marshal(payload)
 
 	// 4. Send to Hugging Face Commit Endpoint
-	// URL: https://huggingface.co/api/datasets/REPO/commit/main
 	apiUrl := fmt.Sprintf("https://huggingface.co/api/datasets/%s/commit/main", repo)
 
-	req, err := http.NewRequest("POST", apiUrl, body)
+	req, err := http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create request"})
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)

@@ -63,24 +63,24 @@ export const fetchAPI = async (endpoint: string, options: RequestInit = {}): Pro
 };
 
 // Products
-export const getProducts = () => fetchAPI("/v1/products");
-export const addProduct = (data: any) => fetchAPI("/v1/products", { method: "POST", body: JSON.stringify(data) });
-export const updateProduct = (id: string, data: any) => fetchAPI(`/v1/products/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const getProducts = () => fetchAPI("/v1/admin/products");
+export const addProduct = (data: any) => fetchAPI("/v1/admin/products", { method: "POST", body: JSON.stringify(data) });
+export const updateProduct = (id: string, data: any) => fetchAPI(`/v1/admin/products/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const deleteProduct = (id: string, masterKey: string, confirmation: string) => 
-    fetchAPI(`/v1/products/${id}/delete`, { 
+    fetchAPI(`/v1/admin/products/${id}/delete`, { 
         method: "POST", 
         body: JSON.stringify({ master_key: masterKey, confirmation }) 
     });
 
 // Infrastructure (Default Shards)
-export const getShards = () => fetchAPI("/v1/infrastructure/shards");
-export const addShard = (data: any) => fetchAPI("/v1/infrastructure/shards", { method: "POST", body: JSON.stringify(data) });
-export const removeShard = (id: string) => fetchAPI(`/v1/infrastructure/shards/${id}`, { method: "DELETE" });
+export const getShards = () => fetchAPI("/v1/admin/infrastructure/shards");
+export const addShard = (data: any) => fetchAPI("/v1/admin/infrastructure/shards", { method: "POST", body: JSON.stringify(data) });
+export const removeShard = (id: string) => fetchAPI(`/v1/admin/infrastructure/shards/${id}`, { method: "DELETE" });
 
 // Databases
-export const getDatabases = () => fetchAPI("/v1/databases");
-export const addDatabase = (data: any) => fetchAPI("/v1/databases", { method: "POST", body: JSON.stringify(data) });
-export const getDatabaseDetails = (slug: string) => fetchAPI(`/v1/databases/${slug}`);
+export const getDatabases = () => fetchAPI("/v1/admin/databases");
+export const addDatabase = (data: any) => fetchAPI("/v1/admin/databases", { method: "POST", body: JSON.stringify(data) });
+export const getDatabaseDetails = (slug: string) => fetchAPI(`/v1/admin/databases/${slug}`);
 
 // Audit
-export const getAuditLogs = () => fetchAPI("/v1/audit");
+export const getAuditLogs = () => fetchAPI("/v1/admin/audit");

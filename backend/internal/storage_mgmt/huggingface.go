@@ -67,7 +67,7 @@ func CreateHuggingFaceRepo(c *fiber.Ctx) error {
 	})
 }
 
-// UploadToHuggingFace sends a file to a Hugging Face repository
+// UploadToHuggingFace sends a file to a Hugging Face repository using the new Commit API
 func UploadToHuggingFace(c *fiber.Ctx) error {
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -76,7 +76,7 @@ func UploadToHuggingFace(c *fiber.Ctx) error {
 
 	// 1. Get HF Config from Environment
 	token := config.AppConfig.HFToken
-	repo := config.AppConfig.HFStorageRepo // e.g., "lordbandhan07/bandhannova-drive"
+	repo := config.AppConfig.HFStorageRepo
 	
 	if token == "" || repo == "" {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Hugging Face storage not configured"})
@@ -89,52 +89,64 @@ func UploadToHuggingFace(c *fiber.Ctx) error {
 	}
 	defer src.Close()
 
-	fileBuffer := new(bytes.Buffer)
-	if _, err := io.Copy(fileBuffer, src); err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to read file"})
-	}
-
-	// 3. Prepare HF API Request
+	// 3. Prepare Multipart Form for HF Commit API
 	productSlug := c.FormValue("product_slug", "general")
 	fileName := fmt.Sprintf("%d-%s", time.Now().Unix(), file.Filename)
 	hfPath := fmt.Sprintf("%s/uploads/%s", productSlug, fileName)
-	
-	// HF URL: https://huggingface.co/api/datasets/REPO/upload/main/PATH
-	apiUrl := fmt.Sprintf("https://huggingface.co/api/datasets/%s/upload/main/%s", repo, hfPath)
 
-	req, err := http.NewRequest("POST", apiUrl, fileBuffer)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Add operations JSON
+	// The API expects an array of operations. We use addFile to upload.
+	ops := fmt.Sprintf(`[{"operation": "addFile", "pathInRepo": "%s"}]`, hfPath)
+	_ = writer.WriteField("operations", ops)
+	_ = writer.WriteField("commitMessage", fmt.Sprintf("Upload %s via BandhanNova API Hunter", fileName))
+
+	// Add file content
+	part, err := writer.CreateFormFile("file", fileName)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create form file"})
+	}
+	if _, err := io.Copy(part, src); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to copy file content"})
+	}
+	writer.Close()
+
+	// 4. Send to Hugging Face Commit Endpoint
+	// URL: https://huggingface.co/api/datasets/REPO/commit/main
+	apiUrl := fmt.Sprintf("https://huggingface.co/api/datasets/%s/commit/main", repo)
+
+	req, err := http.NewRequest("POST", apiUrl, body)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create request"})
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	// 4. Send to Hugging Face
-	client := &http.Client{Timeout: 60 * time.Second}
+	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to connect to Hugging Face"})
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
 		return c.Status(resp.StatusCode).JSON(fiber.Map{
 			"error": true, 
-			"message": "Hugging Face upload failed", 
-			"details": string(body),
+			"message": "Hugging Face Commit failed", 
+			"details": string(respBody),
 		})
 	}
 
 	// 5. Return the URL
-	// Note: For private datasets, the raw URL requires a token. 
-	// For public viewing, you might need to use a proxy or make the dataset public.
 	rawUrl := fmt.Sprintf("https://huggingface.co/datasets/%s/resolve/main/%s", repo, hfPath)
 
 	return c.JSON(fiber.Map{
 		"success": true,
-		"message": "File uploaded to Hugging Face Cloud",
+		"message": "File uploaded and committed to Hugging Face",
 		"file_info": fiber.Map{
 			"name": fileName,
 			"path": hfPath,

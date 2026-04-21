@@ -109,8 +109,9 @@ func UploadToHuggingFace(c *fiber.Ctx) error {
 
 	// 3. Prepare JSON Payload for HF Commit API
 	productSlug := c.FormValue("product_slug", "general")
+	bucket := c.FormValue("bucket", "uploads") // Default to uploads bucket
 	fileName := fmt.Sprintf("%d-%s", time.Now().Unix(), file.Filename)
-	hfPath := fmt.Sprintf("%s/uploads/%s", productSlug, fileName)
+	hfPath := fmt.Sprintf("%s/%s/%s", productSlug, bucket, fileName)
 
 	payload := CommitPayload{
 		Summary: fmt.Sprintf("Upload %s via BandhanNova API Hunter", fileName),
@@ -153,16 +154,20 @@ func UploadToHuggingFace(c *fiber.Ctx) error {
 	}
 
 	// 5. Return the URL
+	// Updated to show the new bucket-based proxy URL
+	proxyUrl := fmt.Sprintf("/storage/view/%s/%s/%s", productSlug, bucket, fileName)
 	rawUrl := fmt.Sprintf("https://huggingface.co/datasets/%s/resolve/main/%s", repo, hfPath)
 
 	return c.JSON(fiber.Map{
 		"success": true,
-		"message": "File uploaded and committed to Hugging Face",
+		"message": "File committed to " + bucket + " bucket",
 		"file_info": fiber.Map{
-			"name": fileName,
-			"path": hfPath,
-			"url":  rawUrl,
-			"size": file.Size,
+			"name":      fileName,
+			"bucket":    bucket,
+			"path":      hfPath,
+			"proxy_url": proxyUrl,
+			"url":       rawUrl,
+			"size":      file.Size,
 		},
 	})
 }
@@ -204,6 +209,7 @@ func InitializeProductFolder(slug string) {
 // ProxyViewFile allows viewing private files by proxying the request with the HF Token
 func ProxyViewFile(c *fiber.Ctx) error {
 	productSlug := c.Params("product_slug")
+	bucket := c.Params("bucket")
 	fileName := c.Params("filename")
 	token := config.AppConfig.HFToken
 	repo := config.AppConfig.HFStorageRepo
@@ -212,7 +218,7 @@ func ProxyViewFile(c *fiber.Ctx) error {
 		return c.Status(500).SendString("Storage not configured")
 	}
 
-	hfPath := fmt.Sprintf("%s/uploads/%s", productSlug, fileName)
+	hfPath := fmt.Sprintf("%s/%s/%s", productSlug, bucket, fileName)
 	apiUrl := fmt.Sprintf("https://huggingface.co/datasets/%s/resolve/main/%s", repo, hfPath)
 
 	req, err := http.NewRequest("GET", apiUrl, nil)

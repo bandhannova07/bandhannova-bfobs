@@ -25,7 +25,7 @@ func SetupRoutes(app *fiber.App) {
 	// Ecosystem Execution URLs (/{section}/{card}/execute) - Clean root URLs (Priority)
 	// Virtual Database Gateway (The "No Turso Relation" layer)
 	app.Post("/db/p/:product_slug/execute", database_mgmt.DatabaseProxyHandler)
-	app.Get("/storage/view/:product_slug/:filename", storage_mgmt.ProxyViewFile)
+	app.Get("/storage/view/:product_slug/:bucket/:filename", storage_mgmt.ProxyViewFile)
 
 	v1 := app.Group("/v1", middleware.RedisRateLimiter(60, time.Minute))
 

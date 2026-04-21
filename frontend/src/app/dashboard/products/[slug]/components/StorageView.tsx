@@ -17,6 +17,7 @@ interface StorageViewProps {
 export default function StorageView({ product }: StorageViewProps) {
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [bucket, setBucket] = useState("uploads");
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   const handleUpload = async (e: React.FormEvent) => {
@@ -24,11 +25,12 @@ export default function StorageView({ product }: StorageViewProps) {
     if (!selectedFile) return;
 
     setUploading(true);
-    setUploadStatus("Pushing to Hugging Face LFS...");
+    setUploadStatus("Pushing to HF " + bucket + " bucket...");
 
     const formData = new FormData();
     formData.append("file", selectedFile);
     formData.append("product_slug", product.slug);
+    formData.append("bucket", bucket);
 
     try {
       const token = sessionStorage.getItem("admin_token");
@@ -59,6 +61,20 @@ export default function StorageView({ product }: StorageViewProps) {
             <h3>Cloud Asset Upload</h3>
             <p>Upload images, videos, and binaries for <strong>{product.name}</strong>.</p>
             <form onSubmit={handleUpload} className={styles.uploadForm}>
+              <div className={styles.formGroup} style={{ marginBottom: "15px" }}>
+                <label style={{ fontSize: "12px", color: "var(--text-muted)", display: "block", marginBottom: "5px" }}>Target Bucket</label>
+                <select 
+                  className={styles.input} 
+                  value={bucket} 
+                  onChange={(e) => setBucket(e.target.value)}
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white" }}
+                >
+                  <option value="uploads" style={{ background: "#1a1a1a" }}>📦 General Uploads</option>
+                  <option value="assets" style={{ background: "#1a1a1a" }}>🎨 Visual Assets</option>
+                  <option value="backups" style={{ background: "#1a1a1a" }}>💾 Database Backups</option>
+                  <option value="logs" style={{ background: "#1a1a1a" }}>📄 System Logs</option>
+                </select>
+              </div>
               <input 
                 type="file" 
                 id="file-upload" 
@@ -69,22 +85,22 @@ export default function StorageView({ product }: StorageViewProps) {
                 {selectedFile ? selectedFile.name : "Click or Drag to Upload"}
               </label>
               <button type="submit" className="btn btn-primary" disabled={uploading || !selectedFile}>
-                 {uploading ? "Uploading..." : "Start Upload"}
+                 {uploading ? "Committing..." : "Start Upload"}
               </button>
             </form>
             {uploadStatus && <div className={styles.statusMsg}>{uploadStatus}</div>}
          </div>
 
          <div className={`glass-panel ${styles.infoCard}`}>
-            <h4>Dataset Details</h4>
+            <h4>Fleet Storage Details</h4>
             <div className={styles.detailsList}>
                <div className={styles.detail}>
                   <span>Repository</span>
                   <code>lordbandhan07/api-hunter-storage</code>
                </div>
                <div className={styles.detail}>
-                  <span>Product Root</span>
-                  <code>/{product.slug}/uploads/</code>
+                  <span>Active Bucket</span>
+                  <code>/{product.slug}/{bucket}/</code>
                </div>
             </div>
          </div>

@@ -99,14 +99,19 @@ func checkAllShards() {
 func checkShard(results map[string]ShardHealth, name, shardType string, db interface{}) {
 	if db == nil || (reflect.ValueOf(db).Kind() == reflect.Ptr && reflect.ValueOf(db).IsNil()) {
 		results[name] = ShardHealth{Name: name, Type: shardType, Status: "offline", LastCheck: time.Now()}
-		log.Printf("❌ [PULSE] %-20s | Status: OFFLINE", name)
+		log.Printf("❌ [PULSE] %-20s | Status: OFFLINE (Connection Nil)", name)
 		return
 	}
 
-	sqlDB, ok := db.(interface {
-		QueryRow(query string, args ...interface{}) *sql.Row
-	})
-	if !ok {
+	// Try to get the underlying *sql.DB
+	var sqlDB *sql.DB
+	
+	// Handle direct *sql.DB or anything that can give us one
+	if d, ok := db.(*sql.DB); ok {
+		sqlDB = d
+	} else {
+		// Fallback for any other wrappers
+		log.Printf("⚠️  [PULSE] %-20s | Status: SKIPPED (Not a valid SQL handle)", name)
 		return
 	}
 

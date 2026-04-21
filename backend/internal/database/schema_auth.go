@@ -27,8 +27,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 // InitAuthSchema applies the auth schema to the auth shard
 func InitAuthSchema(db *sql.DB) error {
-	_, err := db.Exec(AuthSchema)
-	if err != nil {
+	if err := ExecuteSchema(db, AuthSchema); err != nil {
 		return fmt.Errorf("failed to apply auth schema: %w", err)
 	}
 	return nil

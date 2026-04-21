@@ -40,8 +40,7 @@ CREATE TABLE IF NOT EXISTS outbound_emails (
 
 // InitAnalyticsSchema applies the analytics schema to the analytics shard
 func InitAnalyticsSchema(db *sql.DB) error {
-	_, err := db.Exec(AnalyticsSchema)
-	if err != nil {
+	if err := ExecuteSchema(db, AnalyticsSchema); err != nil {
 		return fmt.Errorf("failed to apply analytics schema: %w", err)
 	}
 	return nil

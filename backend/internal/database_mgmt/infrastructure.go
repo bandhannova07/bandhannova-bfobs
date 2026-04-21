@@ -270,17 +270,28 @@ func InitializeInfrastructureShard(c *fiber.Ctx) error {
 	defer db.Close()
 
 	// Re-run migrations based on type
+	log.Printf("🛠️  Initializing shard %s (Type: %s)", id, shard.Type)
+	var migrationErr error
 	switch shard.Type {
 	case "global_manager":
-		database.InitGlobalManagerSchema(db)
+		migrationErr = database.InitGlobalManagerSchema(db)
 	case "auth":
-		database.InitAuthSchema(db)
+		migrationErr = database.InitAuthSchema(db)
 	case "analytics":
-		database.InitAnalyticsSchema(db)
+		migrationErr = database.InitAnalyticsSchema(db)
 	case "user":
-		database.InitUserSchema(db)
+		migrationErr = database.InitUserSchema(db)
+	default:
+		log.Printf("⚠️  Unknown shard type: %s", shard.Type)
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Unknown shard type: " + shard.Type})
 	}
 
+	if migrationErr != nil {
+		log.Printf("❌ Migration failed for shard %s: %v", id, migrationErr)
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Migration failed: " + migrationErr.Error()})
+	}
+
+	log.Printf("✅ Shard %s re-initialized successfully", id)
 	return c.JSON(fiber.Map{"success": true, "message": "Shard re-initialized with " + shard.Type + " schema"})
 }
 

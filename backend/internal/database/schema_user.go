@@ -78,8 +78,7 @@ CREATE TABLE IF NOT EXISTS saved_items (
 
 // InitUserSchema applies the user ecosystem schema to a user shard
 func InitUserSchema(db *sql.DB) error {
-	_, err := db.Exec(UserSchema)
-	if err != nil {
+	if err := ExecuteSchema(db, UserSchema); err != nil {
 		return fmt.Errorf("failed to apply user schema: %w", err)
 	}
 	return nil

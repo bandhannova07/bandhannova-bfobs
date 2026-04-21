@@ -135,8 +135,7 @@ CREATE TABLE IF NOT EXISTS storage_buckets (
 
 // InitGlobalManagerSchema applies the global manager schema and handles migrations
 func InitGlobalManagerSchema(db *sql.DB) error {
-	_, err := db.Exec(GlobalManagerSchema)
-	if err != nil {
+	if err := ExecuteSchema(db, GlobalManagerSchema); err != nil {
 		return fmt.Errorf("failed to apply global manager schema: %w", err)
 	}
 

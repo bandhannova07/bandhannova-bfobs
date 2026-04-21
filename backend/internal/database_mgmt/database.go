@@ -50,52 +50,59 @@ type ProductResponse struct {
 
 // ReloadManagedDatabases hot-swaps active DBs from the global managed_databases table
 func ReloadManagedDatabases() error {
-	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
-		return fmt.Errorf("global DB not connected")
+	if database.Router == nil {
+		return fmt.Errorf("shard router not initialized")
 	}
-
-	rows, err := database.Router.GetGlobalManagerDB().Query("SELECT id, slug, name, category, db_url, encrypted_token FROM managed_databases WHERE status = 'active'")
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
 
 	var mDBs []database.ManagedDB
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	for rows.Next() {
-		var id, slug, name, category, dbURL, encrypted string
-		if err := rows.Scan(&id, &slug, &name, &category, &dbURL, &encrypted); err != nil {
-			continue
-		}
+	// Fetch from all Global Manager shards
+	gDBs := config.AppConfig.TursoGlobalURLs
+	for i := range gDBs {
+		db := database.Router.GetGlobalManagerDBBySlug(fmt.Sprintf("gm-%d", i)) // Dummy slug for routing or just iterate
+		// Since we don't have slugs for GM shards yet, let's just get them from the internal slice
+	}
 
+	// Actually, let's just use the router's globalManagerDBs slice
+	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
 		wg.Add(1)
-		go func(id, slug, name, category, dbURL, encrypted string) {
+		go func(db *sql.DB) {
 			defer wg.Done()
-			token, err := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
+			rows, err := db.Query("SELECT id, slug, name, category, db_url, encrypted_token FROM managed_databases WHERE status = 'active'")
 			if err != nil {
-				log.Printf("Failed to decrypt DB token for %s", slug)
 				return
 			}
+			defer rows.Close()
 
-			// Connect to the DB without pinging on boot (Pulse will verify health)
-			connStr := fmt.Sprintf("%s?authToken=%s", dbURL, token)
-			db, err := sql.Open("libsql", connStr)
-			if err != nil {
-				log.Printf("Failed to open managed DB %s: %v", slug, err)
-				return
+			for rows.Next() {
+				var id, slug, name, category, dbURL, encrypted string
+				if err := rows.Scan(&id, &slug, &name, &category, &dbURL, &encrypted); err != nil {
+					continue
+				}
+
+				token, err := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
+				if err != nil {
+					continue
+				}
+
+				connStr := fmt.Sprintf("%s?authToken=%s", dbURL, token)
+				targetDB, err := sql.Open("libsql", connStr)
+				if err != nil {
+					continue
+				}
+
+				mu.Lock()
+				mDBs = append(mDBs, database.ManagedDB{
+					Slug:     slug,
+					Name:     name,
+					Category: category,
+					DB:       targetDB,
+				})
+				mu.Unlock()
 			}
-
-			mu.Lock()
-			mDBs = append(mDBs, database.ManagedDB{
-				Slug:     slug,
-				Name:     name,
-				Category: category,
-				DB:       db,
-			})
-			mu.Unlock()
-		}(id, slug, name, category, dbURL, encrypted)
+		}(gDB)
 	}
 
 	wg.Wait()
@@ -105,37 +112,49 @@ func ReloadManagedDatabases() error {
 
 // ReloadManagedAPIKeys hot-reloads API keys from the global managed_api_keys table
 func ReloadManagedAPIKeys() error {
-	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
-		return fmt.Errorf("global DB not connected")
+	if database.Router == nil {
+		return fmt.Errorf("shard router not initialized")
 	}
-
-	rows, err := database.Router.GetGlobalManagerDB().Query("SELECT provider, encrypted_value FROM managed_api_keys WHERE status = 'active'")
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
 
 	providerKeys := make(map[string][]string)
-	for rows.Next() {
-		var provider, encrypted string
-		if err := rows.Scan(&provider, &encrypted); err != nil {
-			continue
-		}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 
-		key, err := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
-		if err != nil {
-			log.Printf("Failed to decrypt API key for provider: %s", provider)
-			continue
-		}
+	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+		wg.Add(1)
+		go func(db *sql.DB) {
+			defer wg.Done()
+			rows, err := db.Query("SELECT provider, encrypted_value FROM managed_api_keys WHERE status = 'active'")
+			if err != nil {
+				return
+			}
+			defer rows.Close()
 
-		providerKeys[provider] = append(providerKeys[provider], key)
+			for rows.Next() {
+				var provider, encrypted string
+				if err := rows.Scan(&provider, &encrypted); err != nil {
+					continue
+				}
+
+				key, err := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
+				if err != nil {
+					continue
+				}
+
+				mu.Lock()
+				providerKeys[provider] = append(providerKeys[provider], key)
+				mu.Unlock()
+			}
+		}(gDB)
 	}
+
+	wg.Wait()
 
 	for provider, keys := range providerKeys {
 		config.UpdateKeys(provider, keys)
 	}
 
-	log.Printf("🛡️  Managed API keys reloaded from database")
+	log.Printf("🛡️  Managed API keys reloaded from all global shards")
 	return nil
 }
 
@@ -143,15 +162,27 @@ func ReloadManagedAPIKeys() error {
 func ListDatabases(c *fiber.Ctx) error {
 	var resp []DatabaseResponse
 
-	// Add Core DBs only if they actually have a URL
+	// Core Master Shard
+	if config.AppConfig.TursoCoreURL != "" {
+		resp = append(resp, DatabaseResponse{ID: "core-master", Slug: "core-master", Name: "Core Master (Shard 1)", Category: "core", URL: config.AppConfig.TursoCoreURL, Status: "active", IsCore: true})
+	}
+	// Global Manager Shards
+	for i, u := range config.AppConfig.TursoGlobalURLs {
+		if u != "" {
+			slug := fmt.Sprintf("core-gm-%d", i)
+			name := fmt.Sprintf("Global Manager (Shard %d)", i+2)
+			if i+2 == 3 {
+				name += " [Primary]"
+			}
+			resp = append(resp, DatabaseResponse{ID: slug, Slug: slug, Name: name, Category: "global", URL: u, Status: "active", IsCore: true})
+		}
+	}
+	// Auth & Analytics Shards
 	if config.AppConfig.TursoAuthURL != "" {
 		resp = append(resp, DatabaseResponse{ID: "core-auth", Slug: "core-auth", Name: "Core Auth", Category: "auth", URL: config.AppConfig.TursoAuthURL, Status: "active", IsCore: true})
 	}
 	if config.AppConfig.TursoAnalyticsURL != "" {
 		resp = append(resp, DatabaseResponse{ID: "core-analytics", Slug: "core-analytics", Name: "Core Analytics", Category: "analytics", URL: config.AppConfig.TursoAnalyticsURL, Status: "active", IsCore: true})
-	}
-	if config.AppConfig.TursoGlobalURL != "" {
-		resp = append(resp, DatabaseResponse{ID: "core-global", Slug: "core-global", Name: "Core Global", Category: "global", URL: config.AppConfig.TursoGlobalURL, Status: "active", IsCore: true})
 	}
 	
 	for i, u := range config.AppConfig.TursoUserShardURLs {
@@ -406,35 +437,48 @@ func GetDatabaseDetails(c *fiber.Ctx) error {
 // ─── PRODUCT MANAGEMENT ───────────────────────────────────────────────────
 
 func ListProducts(c *fiber.Ctx) error {
-	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Global DB not connected"})
+	if database.Router == nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Router not initialized"})
 	}
-
-	rows, err := database.Router.GetGlobalManagerDB().Query(`
-		SELECT p.id, p.name, p.slug, p.app_type, p.app_url, p.description, p.icon, p.status, p.created_at, p.updated_at, c.client_id, c.client_secret
-		FROM managed_products p
-		LEFT JOIN oauth_clients c ON p.id = c.product_id
-		ORDER BY p.created_at DESC
-	`)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to query products"})
-	}
-	defer rows.Close()
 
 	var products []ProductResponse
-	for rows.Next() {
-		var p ProductResponse
-		var appType, appURL, icon, clientID, clientSecret sql.NullString
-		if err := rows.Scan(&p.ID, &p.Name, &p.Slug, &appType, &appURL, &p.Description, &icon, &p.Status, &p.CreatedAt, &p.UpdatedAt, &clientID, &clientSecret); err == nil {
-			if appType.Valid { p.AppType = appType.String }
-			if appURL.Valid { p.AppURL = appURL.String }
-			if icon.Valid { p.Icon = icon.String }
-			if clientID.Valid { p.ClientID = clientID.String }
-			if clientSecret.Valid { p.ClientSecret = clientSecret.String }
-			products = append(products, p)
-		}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+		wg.Add(1)
+		go func(db *sql.DB) {
+			defer wg.Done()
+			rows, err := db.Query(`
+				SELECT p.id, p.name, p.slug, p.app_type, p.app_url, p.description, p.icon, p.status, p.created_at, p.updated_at, c.client_id, c.client_secret
+				FROM managed_products p
+				LEFT JOIN oauth_clients c ON p.id = c.product_id
+				ORDER BY p.created_at DESC
+			`)
+			if err != nil {
+				return
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var p ProductResponse
+				var appType, appURL, icon, clientID, clientSecret sql.NullString
+				if err := rows.Scan(&p.ID, &p.Name, &p.Slug, &appType, &appURL, &p.Description, &icon, &p.Status, &p.CreatedAt, &p.UpdatedAt, &clientID, &clientSecret); err == nil {
+					if appType.Valid { p.AppType = appType.String }
+					if appURL.Valid { p.AppURL = appURL.String }
+					if icon.Valid { p.Icon = icon.String }
+					if clientID.Valid { p.ClientID = clientID.String }
+					if clientSecret.Valid { p.ClientSecret = clientSecret.String }
+					
+					mu.Lock()
+					products = append(products, p)
+					mu.Unlock()
+				}
+			}
+		}(gDB)
 	}
 
+	wg.Wait()
 	return c.JSON(fiber.Map{"success": true, "products": products})
 }
 
@@ -520,11 +564,17 @@ func AddProduct(c *fiber.Ctx) error {
 	slug := strings.ToLower(strings.ReplaceAll(req.Name, " ", "-"))
 	now := time.Now().Unix()
 
+	// 1. Resolve target Global Manager shard (Load Balanced)
+	targetGDB := database.Router.GetGlobalManagerDBBySlug(slug)
+	if targetGDB == nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "No Global Manager shards available"})
+	}
+
 	// Auto-generate OAuth Credentials
 	clientID := "bn_" + strings.ReplaceAll(uuid.New().String(), "-", "")[:16]
 	clientSecret := base64.StdEncoding.EncodeToString([]byte(uuid.New().String() + uuid.New().String()))[:48]
 
-	tx, err := database.Router.GetGlobalManagerDB().Begin()
+	tx, err := targetGDB.Begin()
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Transaction failed"})
 	}
@@ -549,10 +599,10 @@ func AddProduct(c *fiber.Ctx) error {
 
 	tx.Commit()
 
-	// Automatic storage is now handled via sub-folders in the master repository.
+	// Automatic storage
 	go storage_mgmt.InitializeProductFolder(slug)
 	
-	logAudit("ADD_PRODUCT", req.Name, ip, fmt.Sprintf("Added product: %s (Client: %s)", req.Name, clientID))
+	logAuditShard(targetGDB, "ADD_PRODUCT", req.Name, ip, fmt.Sprintf("Added product: %s (Client: %s)", req.Name, clientID))
 
 	return c.JSON(fiber.Map{"success": true, "message": "Product added with OAuth credentials", "id": id, "client_id": clientID, "client_secret": clientSecret})
 }
@@ -695,17 +745,24 @@ func GetPulseHealth(c *fiber.Ctx) error {
 	})
 }
 
-func logAudit(action, target, ip, details string) {
-	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+func logAuditShard(db *sql.DB, action, target, ip, details string) {
+	if db == nil {
 		return
 	}
-	_, err := database.Router.GetGlobalManagerDB().Exec(
+	_, err := db.Exec(
 		"INSERT INTO admin_audit_logs (action, target, ip, details, timestamp) VALUES (?, ?, ?, ?, ?)",
 		action, target, ip, details, time.Now().Unix(),
 	)
 	if err != nil {
 		log.Printf("Failed to log audit: %v", err)
 	}
+}
+
+func logAudit(action, target, ip, details string) {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return
+	}
+	logAuditShard(database.Router.GetGlobalManagerDB(), action, target, ip, details)
 }
 
 func createHFRepoInternal(name string, private bool) {

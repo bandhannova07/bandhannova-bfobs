@@ -159,6 +159,12 @@ func (sr *ShardRouter) GetAuthDB() *sql.DB             { return sr.authDB }
 func (sr *ShardRouter) GetAnalyticsDB() *sql.DB        { return sr.analyticsDB }
 func (sr *ShardRouter) GetCoreMasterDB() *sql.DB       { return sr.coreMasterDB }
 
+func (sr *ShardRouter) GetAllGlobalManagerDBs() []*sql.DB {
+	sr.mu.RLock()
+	defer sr.mu.RUnlock()
+	return sr.globalManagerDBs
+}
+
 func (sr *ShardRouter) GetGlobalManagerDB() *sql.DB {
 	// Default to first shard if no slug provided
 	if len(sr.globalManagerDBs) == 0 {

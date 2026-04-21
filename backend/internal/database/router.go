@@ -75,19 +75,19 @@ type ManagedDB struct {
 
 type ShardRouter struct {
 	mu              sync.RWMutex
-	authDB          *sql.DB
-	analyticsDB     *sql.DB
-	coreMasterDB    *sql.DB
+	authDBs         []*sql.DB
+	analyticsDBs    []*sql.DB
 	globalManagerDBs []*sql.DB
+	coreMasterDB    *sql.DB
 	userDBs         []*sql.DB
+	managedDBs      map[string]ManagedDB
 
-	coreAuthDB          *sql.DB
-	coreAnalyticsDB     *sql.DB
-	coreCoreMasterDB    *sql.DB
+	// Public access for modules
+	coreAuthDBs          []*sql.DB
+	coreAnalyticsDBs     []*sql.DB
 	coreGlobalManagerDBs []*sql.DB
-	coreUserDBs         []*sql.DB
-
-	managedDBs map[string]ManagedDB
+	coreCoreMasterDB     *sql.DB
+	coreUserDBs          []*sql.DB
 }
 
 var Router *ShardRouter
@@ -140,9 +140,9 @@ func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, coreURL, 
 			case "global_manager":
 				router.globalManagerDBs = append(router.globalManagerDBs, db)
 			case "auth":
-				router.authDB = db
+				router.authDBs = append(router.authDBs, db)
 			case "analytics":
-				router.analyticsDB = db
+				router.analyticsDBs = append(router.analyticsDBs, db)
 			case "user":
 				router.userDBs = append(router.userDBs, db)
 			}
@@ -150,32 +150,79 @@ func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, coreURL, 
 	}
 
 	// 3. Fallback to Env-based Auth/Analytics if not found in Registry
-	if router.authDB == nil && authURL != "" {
-		router.authDB, _ = ConnectTurso(authURL, authToken)
+	if len(router.authDBs) == 0 && authURL != "" {
+		db, _ := ConnectTurso(authURL, authToken)
+		if db != nil {
+			router.authDBs = append(router.authDBs, db)
+		}
 	}
-	if router.analyticsDB == nil && analyticsURL != "" {
-		router.analyticsDB, _ = ConnectTurso(analyticsURL, analyticsToken)
+	if len(router.analyticsDBs) == 0 && analyticsURL != "" {
+		db, _ := ConnectTurso(analyticsURL, analyticsToken)
+		if db != nil {
+			router.analyticsDBs = append(router.analyticsDBs, db)
+		}
 	}
 
 	if len(router.globalManagerDBs) == 0 {
 		log.Println("⚠️ No Global Manager shards found in registry. System functionality will be limited.")
 	}
 
-	router.coreAuthDB = router.authDB
-	router.coreAnalyticsDB = router.analyticsDB
+	router.coreAuthDBs = append([]*sql.DB{}, router.authDBs...)
+	router.coreAnalyticsDBs = append([]*sql.DB{}, router.analyticsDBs...)
 	router.coreCoreMasterDB = router.coreMasterDB
 	router.coreGlobalManagerDBs = append([]*sql.DB{}, router.globalManagerDBs...)
 	router.coreUserDBs = append([]*sql.DB{}, router.userDBs...)
 	router.managedDBs = make(map[string]ManagedDB)
 
 	Router = router
-	log.Printf("🧠 Shard Router Ready: [CoreMaster, %d GlobalManager, %d User Shards]", len(router.globalManagerDBs), len(router.userDBs))
+	log.Printf("🧠 Shard Router Ready: [CoreMaster, %d Auth, %d Analytics, %d GlobalManager, %d User Shards]", 
+		len(router.authDBs), len(router.analyticsDBs), len(router.globalManagerDBs), len(router.userDBs))
 	return nil
 }
 
-func (sr *ShardRouter) GetAuthDB() *sql.DB             { return sr.authDB }
-func (sr *ShardRouter) GetAnalyticsDB() *sql.DB        { return sr.analyticsDB }
-func (sr *ShardRouter) GetCoreMasterDB() *sql.DB       { return sr.coreMasterDB }
+func (sr *ShardRouter) GetAuthDB(identifier ...string) *sql.DB {
+	sr.mu.RLock()
+	defer sr.mu.RUnlock()
+	if len(sr.authDBs) == 0 {
+		return nil
+	}
+	if len(identifier) > 0 && identifier[0] != "" {
+		h := fnv.New32a()
+		h.Write([]byte(identifier[0]))
+		idx := int(h.Sum32()) % len(sr.authDBs)
+		return sr.authDBs[idx]
+	}
+	return sr.authDBs[0]
+}
+
+func (sr *ShardRouter) GetAllAuthDBs() []*sql.DB {
+	sr.mu.RLock()
+	defer sr.mu.RUnlock()
+	return sr.authDBs
+}
+
+func (sr *ShardRouter) GetAnalyticsDB(identifier ...string) *sql.DB {
+	sr.mu.RLock()
+	defer sr.mu.RUnlock()
+	if len(sr.analyticsDBs) == 0 {
+		return nil
+	}
+	if len(identifier) > 0 && identifier[0] != "" {
+		h := fnv.New32a()
+		h.Write([]byte(identifier[0]))
+		idx := int(h.Sum32()) % len(sr.analyticsDBs)
+		return sr.analyticsDBs[idx]
+	}
+	return sr.analyticsDBs[0]
+}
+
+func (sr *ShardRouter) GetAllAnalyticsDBs() []*sql.DB {
+	sr.mu.RLock()
+	defer sr.mu.RUnlock()
+	return sr.analyticsDBs
+}
+
+func (sr *ShardRouter) GetCoreMasterDB() *sql.DB { return sr.coreMasterDB }
 
 func (sr *ShardRouter) GetAllGlobalManagerDBs() []*sql.DB {
 	sr.mu.RLock()
@@ -184,7 +231,8 @@ func (sr *ShardRouter) GetAllGlobalManagerDBs() []*sql.DB {
 }
 
 func (sr *ShardRouter) GetGlobalManagerDB() *sql.DB {
-	// Default to first shard if no slug provided
+	sr.mu.RLock()
+	defer sr.mu.RUnlock()
 	if len(sr.globalManagerDBs) == 0 {
 		return nil
 	}
@@ -238,8 +286,8 @@ func GetPlan(tier string) StoragePlan {
 func (sr *ShardRouter) ReloadDynamicDBs(dbs []ManagedDB) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	sr.authDB = sr.coreAuthDB
-	sr.analyticsDB = sr.coreAnalyticsDB
+	sr.authDBs = append([]*sql.DB{}, sr.coreAuthDBs...)
+	sr.analyticsDBs = append([]*sql.DB{}, sr.coreAnalyticsDBs...)
 	sr.coreMasterDB = sr.coreCoreMasterDB
 	sr.globalManagerDBs = append([]*sql.DB{}, sr.coreGlobalManagerDBs...)
 	sr.userDBs = append([]*sql.DB{}, sr.coreUserDBs...)
@@ -249,9 +297,9 @@ func (sr *ShardRouter) ReloadDynamicDBs(dbs []ManagedDB) {
 		newManaged[mdb.Slug] = mdb
 		switch mdb.Category {
 		case "auth":
-			sr.authDB = mdb.DB
+			sr.authDBs = append(sr.authDBs, mdb.DB)
 		case "analytics":
-			sr.analyticsDB = mdb.DB
+			sr.analyticsDBs = append(sr.analyticsDBs, mdb.DB)
 		case "core":
 			sr.coreMasterDB = mdb.DB
 		case "global":
@@ -270,10 +318,10 @@ func (sr *ShardRouter) GetManagedDBBySlug(slug string) *sql.DB {
 		return mdb.DB
 	}
 	if slug == "core-auth" {
-		return sr.coreAuthDB
+		return sr.GetAuthDB()
 	}
 	if slug == "core-analytics" {
-		return sr.coreAnalyticsDB
+		return sr.GetAnalyticsDB()
 	}
 	if slug == "core-global" {
 		return sr.GetGlobalManagerDB()

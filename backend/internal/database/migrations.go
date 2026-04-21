@@ -13,30 +13,30 @@ func RunMigrations() {
 
 	log.Println("🔧 Running BandhanNova Ecosystem schema migrations...")
 
-	// 1. Auth Shard
-	if db := Router.GetAuthDB(); db != nil {
+	// 1. Auth Shards Cluster
+	for i, db := range Router.GetAllAuthDBs() {
 		if err := InitAuthSchema(db); err != nil {
-			log.Printf("⚠️ Auth migration error: %v", err)
+			log.Printf("⚠️ Auth Shard %d migration error: %v", i, err)
 		} else {
-			log.Println("  ✅ Auth schema migrated")
+			log.Printf("  ✅ Auth Shard %d migrated", i)
 		}
 	}
 
-	// 2. Analytics Shard
-	if db := Router.GetAnalyticsDB(); db != nil {
+	// 2. Analytics Shards Cluster
+	for i, db := range Router.GetAllAnalyticsDBs() {
 		if err := InitAnalyticsSchema(db); err != nil {
-			log.Printf("⚠️ Analytics migration error: %v", err)
+			log.Printf("⚠️ Analytics Shard %d migration error: %v", i, err)
 		} else {
-			log.Println("  ✅ Analytics schema migrated")
+			log.Printf("  ✅ Analytics Shard %d migrated", i)
 		}
 	}
 
-	// 3. Global Manager Shard
-	if db := Router.GetGlobalManagerDB(); db != nil {
+	// 3. Global Manager Shards Cluster
+	for i, db := range Router.GetAllGlobalManagerDBs() {
 		if err := InitGlobalManagerSchema(db); err != nil {
-			log.Printf("⚠️ Global Manager migration error: %v", err)
+			log.Printf("⚠️ Global Manager Shard %d migration error: %v", i, err)
 		} else {
-			log.Println("  ✅ Global Manager schema migrated")
+			log.Printf("  ✅ Global Manager Shard %d migrated", i)
 		}
 	}
 

@@ -130,6 +130,18 @@ CREATE TABLE IF NOT EXISTS storage_buckets (
     UNIQUE(product_id, slug)
 );
 
+CREATE TABLE IF NOT EXISTS storage_assets (
+    id TEXT PRIMARY KEY,
+    bucket_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    path TEXT NOT NULL,
+    size INTEGER,
+    content_type TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (bucket_id) REFERENCES storage_buckets(id) ON DELETE CASCADE
+);
+
+
 `
 
 // InitGlobalManagerSchema applies the global manager schema and handles migrations

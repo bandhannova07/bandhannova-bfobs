@@ -166,13 +166,10 @@ export default function StorageView({ product }: StorageViewProps) {
 
       const data = await res.json();
       if (data.success) {
-        setUploadStatus("✅ Upload Successful! Syncing with HF...");
+        setUploadStatus("✅ Upload Successful!");
         setSelectedFile(null);
-        // Wait 3 seconds for HF to process the commit
-        setTimeout(() => {
-          openBucket(activeBucket);
-          setUploadStatus(null);
-        }, 3000);
+        openBucket(activeBucket); // Instant refresh from DB!
+        setTimeout(() => setUploadStatus(null), 2000);
       } else {
         setUploadStatus("❌ Upload Failed: " + (data.message || "Unknown error"));
       }

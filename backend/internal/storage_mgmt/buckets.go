@@ -155,42 +155,51 @@ func DeleteBucket(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "message": "Bucket decommissioned successfully"})
 }
 
-// ListBucketFiles fetches the file list from Hugging Face Tree API
+// ListBucketFiles fetches the file list from our Database (Supabase Style)
 func ListBucketFiles(c *fiber.Ctx) error {
 	productSlug := c.Params("product_slug")
 	bucketSlug := c.Params("bucket_slug")
-	token := config.AppConfig.HFToken
-	repo := config.AppConfig.HFStorageRepo
 
-	if token == "" || repo == "" {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Storage not configured"})
-	}
+	// Resolve bucket ID
+	var bucketID string
+	err := database.Router.GetGlobalManagerDB().QueryRow(
+		"SELECT b.id FROM storage_buckets b JOIN managed_products p ON b.product_id = p.id WHERE p.slug = ? AND b.slug = ?",
+		productSlug, bucketSlug,
+	).Scan(&bucketID)
 
-	// HF Tree API: GET https://huggingface.co/api/datasets/{repo}/tree/main/{path}
-	// Added timestamp for cache busting
-	apiUrl := fmt.Sprintf("https://huggingface.co/api/datasets/%s/tree/main/%s/%s?t=%d", repo, productSlug, bucketSlug, time.Now().Unix())
-
-	req, err := http.NewRequest("GET", apiUrl, nil)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create request"})
+		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Bucket not found"})
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
+	rows, err := database.Router.GetGlobalManagerDB().Query(
+		"SELECT id, name, path, size, content_type, created_at FROM storage_assets WHERE bucket_id = ? ORDER BY created_at DESC",
+		bucketID,
+	)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to connect to HF"})
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to fetch assets"})
 	}
-	defer resp.Body.Close()
+	defer rows.Close()
 
 	var files []interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&files); err != nil {
-		// If 404, might be empty
-		if resp.StatusCode == 404 {
-			return c.JSON(fiber.Map{"success": true, "files": []interface{}{}})
+	for rows.Next() {
+		var id, name, path, contentType string
+		var size int64
+		var createdAt int64
+		if err := rows.Scan(&id, &name, &path, &size, &contentType, &createdAt); err != nil {
+			continue
 		}
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to parse file list"})
+
+		// Map to a format the frontend understands (mimicking HF Tree API structure for compatibility)
+		files = append(files, fiber.Map{
+			"id":   id,
+			"path": path,
+			"name": name,
+			"type": "file",
+			"size": size,
+			"lastCommit": fiber.Map{
+				"date": time.Unix(createdAt, 0).Format(time.RFC3339),
+			},
+		})
 	}
 
 	return c.JSON(fiber.Map{"success": true, "files": files})

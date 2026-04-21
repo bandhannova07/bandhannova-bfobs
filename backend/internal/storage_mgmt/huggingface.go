@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/bandhannova/api-hunter/internal/config"
+	"github.com/bandhannova/api-hunter/internal/database"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 )
 
 // CreateHuggingFaceRepo creates a new Dataset repository on Hugging Face
@@ -153,7 +155,26 @@ func UploadToHuggingFace(c *fiber.Ctx) error {
 		})
 	}
 
-	// 5. Return the URL
+	// 5. If successful, track in Database (Supabase Style)
+	go func() {
+		// Resolve bucket ID
+		var bucketID string
+		err := database.Router.GetGlobalManagerDB().QueryRow(
+			"SELECT b.id FROM storage_buckets b JOIN managed_products p ON b.product_id = p.id WHERE p.slug = ? AND b.slug = ?",
+			productSlug, bucket,
+		).Scan(&bucketID)
+		
+		if err == nil {
+			assetID := uuid.New().String()
+			contentType := file.Header.Get("Content-Type")
+			_, _ = database.Router.GetGlobalManagerDB().Exec(
+				"INSERT INTO storage_assets (id, bucket_id, name, path, size, content_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+				assetID, bucketID, fileName, hfPath, file.Size, contentType, time.Now().Unix(),
+			)
+		}
+	}()
+
+	// 6. Return the URL
 	// Updated to show the new bucket-based proxy URL
 	proxyUrl := fmt.Sprintf("/storage/view/%s/%s/%s", productSlug, bucket, fileName)
 	rawUrl := fmt.Sprintf("https://huggingface.co/datasets/%s/resolve/main/%s", repo, hfPath)

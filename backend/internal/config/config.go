@@ -165,47 +165,6 @@ func fallbackToInternalRegistry() {
 		}
 	}
 
-	// Turso Database Fallbacks (Temporarily disabled for fresh testing)
-	/*
-	if AppConfig.TursoAuthURL == "" {
-		decrypted := decryptInternal(InternalRegistry["TURSO_AUTH_URL"], master)
-		if len(decrypted) > 0 {
-			AppConfig.TursoAuthURL = decrypted[0]
-		}
-	}
-	if AppConfig.TursoAuthToken == "" {
-		decrypted := decryptInternal(InternalRegistry["TURSO_AUTH_TOKEN"], master)
-		if len(decrypted) > 0 {
-			AppConfig.TursoAuthToken = decrypted[0]
-		}
-	}
-	if AppConfig.TursoAnalyticsURL == "" {
-		decrypted := decryptInternal(InternalRegistry["TURSO_ANALYTICS_URL"], master)
-		if len(decrypted) > 0 {
-			AppConfig.TursoAnalyticsURL = decrypted[0]
-		}
-	}
-	if AppConfig.TursoAnalyticsToken == "" {
-		decrypted := decryptInternal(InternalRegistry["TURSO_ANALYTICS_TOKEN"], master)
-		if len(decrypted) > 0 {
-			AppConfig.TursoAnalyticsToken = decrypted[0]
-		}
-	}
-	*/
-	/*
-	if AppConfig.TursoGlobalURL == "" {
-		decrypted := decryptInternal(InternalRegistry["TURSO_GLOBAL_URL"], master)
-		if len(decrypted) > 0 {
-			AppConfig.TursoGlobalURL = decrypted[0]
-		}
-	}
-	if AppConfig.TursoGlobalToken == "" {
-		decrypted := decryptInternal(InternalRegistry["TURSO_GLOBAL_TOKEN"], master)
-		if len(decrypted) > 0 {
-			AppConfig.TursoGlobalToken = decrypted[0]
-		}
-	}
-	*/
 	if len(AppConfig.TursoUserShardURLs) == 0 {
 		AppConfig.TursoUserShardURLs = decryptInternal(InternalRegistry["TURSO_USER_SHARD_URLS"], master)
 	}

@@ -610,12 +610,24 @@ func UpdateProduct(c *fiber.Ctx) error {
 	}
 
 	now := time.Now().Unix()
-	_, err := database.Router.GetGlobalManagerDB().Exec(
-		"UPDATE managed_products SET name = ?, app_type = ?, app_url = ?, description = ?, icon = ?, updated_at = ? WHERE id = ?",
-		req.Name, req.AppType, req.AppURL, req.Description, req.Icon, now, id,
-	)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to update product"})
+	found := false
+	
+	for _, db := range database.Router.GetAllGlobalManagerDBs() {
+		res, err := db.Exec(
+			"UPDATE managed_products SET name = ?, app_type = ?, app_url = ?, description = ?, icon = ?, updated_at = ? WHERE id = ?",
+			req.Name, req.AppType, req.AppURL, req.Description, req.Icon, now, id,
+		)
+		if err == nil {
+			rows, _ := res.RowsAffected()
+			if rows > 0 {
+				found = true
+				break
+			}
+		}
+	}
+
+	if !found {
+		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Product not found on any shard"})
 	}
 
 	logAudit("UPDATE_PRODUCT", req.Name, ip, fmt.Sprintf("Updated product: %s", req.Name))
@@ -642,8 +654,16 @@ func DeleteProduct(c *fiber.Ctx) error {
 
 	// 2. Get Product Info
 	var pName string
-	err := database.Router.GetGlobalManagerDB().QueryRow("SELECT name FROM managed_products WHERE id = ?", id).Scan(&pName)
-	if err != nil {
+	var pNameFound bool
+	for _, db := range database.Router.GetAllGlobalManagerDBs() {
+		err := db.QueryRow("SELECT name FROM managed_products WHERE id = ?", id).Scan(&pName)
+		if err == nil {
+			pNameFound = true
+			break
+		}
+	}
+	
+	if !pNameFound {
 		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Product not found"})
 	}
 
@@ -686,9 +706,24 @@ func DeleteProduct(c *fiber.Ctx) error {
 	}
 
 	// 5. Delete Product
-	_, err = database.Router.GetGlobalManagerDB().Exec("DELETE FROM managed_products WHERE id = ?", id)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to delete product record"})
+	var deleteFound bool
+	for _, db := range database.Router.GetAllGlobalManagerDBs() {
+		res, err := db.Exec("DELETE FROM managed_products WHERE id = ?", id)
+		if err == nil {
+			count, _ := res.RowsAffected()
+			if count > 0 {
+				// Also delete OAuth client from the same shard
+				db.Exec("DELETE FROM oauth_clients WHERE product_id = ?", id)
+				// And cleanup managed_databases on THIS shard if they exist
+				db.Exec("DELETE FROM managed_databases WHERE product_id = ?", id)
+				deleteFound = true
+				break
+			}
+		}
+	}
+
+	if !deleteFound {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to delete product record from fleet"})
 	}
 
 	logAudit("DELETE_PRODUCT", pName, ip, fmt.Sprintf("DELETED PRODUCT AND WIPED SHARDS: %s", pName))
@@ -707,25 +742,36 @@ func ResetOAuthCredentials(c *fiber.Ctx) error {
 	clientID := "bn_" + strings.ReplaceAll(uuid.New().String(), "-", "")[:16]
 	clientSecret := base64.StdEncoding.EncodeToString([]byte(uuid.New().String() + uuid.New().String()))[:48]
 
-	tx, err := database.Router.GetGlobalManagerDB().Begin()
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Transaction failed"})
+	var resetFound bool
+	for _, db := range database.Router.GetAllGlobalManagerDBs() {
+		// Check if product exists on this shard
+		var exists int
+		db.QueryRow("SELECT 1 FROM managed_products WHERE id = ?", id).Scan(&exists)
+		if exists == 1 {
+			tx, err := db.Begin()
+			if err != nil {
+				continue
+			}
+			// Delete old if exists
+			tx.Exec("DELETE FROM oauth_clients WHERE product_id = ?", id)
+			// Insert new
+			_, err = tx.Exec(
+				"INSERT INTO oauth_clients (client_id, client_secret, product_id, redirect_uris, created_at) VALUES (?, ?, ?, ?, ?)",
+				clientID, clientSecret, id, "[]", now,
+			)
+			if err != nil {
+				tx.Rollback()
+				return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to reset OAuth on target shard"})
+			}
+			tx.Commit()
+			resetFound = true
+			break
+		}
 	}
 
-	// Delete old if exists
-	tx.Exec("DELETE FROM oauth_clients WHERE product_id = ?", id)
-
-	// Insert new
-	_, err = tx.Exec(
-		"INSERT INTO oauth_clients (client_id, client_secret, product_id, redirect_uris, created_at) VALUES (?, ?, ?, ?, ?)",
-		clientID, clientSecret, id, "[]", now,
-	)
-	if err != nil {
-		tx.Rollback()
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create OAuth client"})
+	if !resetFound {
+		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Product not found to reset OAuth"})
 	}
-
-	tx.Commit()
 
 	logAudit("RESET_OAUTH", id, ip, fmt.Sprintf("Reset OAuth credentials for product ID: %s", id))
 	return c.JSON(fiber.Map{"success": true, "client_id": clientID, "client_secret": clientSecret})

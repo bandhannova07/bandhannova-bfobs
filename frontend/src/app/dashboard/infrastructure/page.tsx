@@ -101,14 +101,32 @@ export default function InfrastructurePage() {
     setIsInspectorLoading(false);
   };
 
+  const [wasReset, setWasReset] = useState(false);
+
+  const handleCloseInspect = async () => {
+    if (inspectShard && wasReset) {
+      try {
+        await initShard(inspectShard.id);
+        loadShards();
+      } catch (error) {
+        console.error("Failed to auto-init shard", error);
+      }
+    }
+    setInspectShard(null);
+    setWasReset(false);
+  };
+
   const handleFactoryReset = async () => {
-    if (!confirm("WARNING: This will PERMANENTLY DELETE all data in this shard and re-initialize it. Proceed?")) return;
+    if (!confirm("CRITICAL: This will PERMANENTLY WIPE everything (Tables, Indexes, Data) in this shard. Re-initialization will occur automatically when you close this inspector. Proceed?")) return;
     setIsInspectorLoading(true);
     try {
       const res = await clearShard(inspectShard!.id);
       if (res.success) {
-        alert("Shard successfully reset to factory state.");
-        handleOpenInspect(inspectShard!); // Refresh tables
+        setWasReset(true);
+        setTables([]);
+        setTableData([]);
+        setSelectedTable("");
+        alert("Shard totally wiped. Tables will be re-created automatically when you close this window.");
       }
     } catch (error) {
       alert("Failed to reset shard");
@@ -242,12 +260,12 @@ export default function InfrastructurePage() {
 
       {/* Inspector Modal */}
       {inspectShard && (
-        <div className={styles.modalOverlay}>
-          <div className={`${styles.modal} ${styles.inspectorModal}`}>
+        <div className={styles.modalOverlay} onClick={handleCloseInspect}>
+          <div className={`${styles.modal} ${styles.inspectorModal}`} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div className={styles.headerTop}>
                 <h3 className={styles.modalTitle}>Shard Explorer: {inspectShard.name}</h3>
-                <button onClick={() => setInspectShard(null)} className={styles.closeBtn}>×</button>
+                <button onClick={handleCloseInspect} className={styles.closeBtn}>×</button>
               </div>
               <div className={styles.inspectorActions}>
                 <div className={styles.tableSelector}>

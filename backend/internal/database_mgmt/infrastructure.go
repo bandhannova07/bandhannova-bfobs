@@ -198,10 +198,52 @@ func QueryInfrastructureShard(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "data": result, "columns": cols})
 }
 
-// ClearInfrastructureShard wipes all tables in a shard for a fresh start
+// ClearInfrastructureShard wipes ALL database objects for a total reset
 func ClearInfrastructureShard(c *fiber.Ctx) error {
 	id := c.Params("id")
-	// Safety check: Cannot clear Core Master via this API
+	
+	var shard struct {
+		URL   string `db:"db_url"`
+		Token string `db:"encrypted_token"`
+	}
+	err := database.Router.GetCoreMasterDB().QueryRow(
+		"SELECT db_url, encrypted_token FROM infrastructure_shards WHERE id = ?", id,
+	).Scan(&shard.URL, &shard.Token)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Shard not found"})
+	}
+
+	decryptedToken, err := security.Decrypt(shard.Token, config.AppConfig.BandhanNovaMasterKey)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Security failure"})
+	}
+
+	db, err := database.ConnectTurso(shard.URL, decryptedToken)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Connection failure"})
+	}
+	defer db.Close()
+
+	// Disable foreign keys for aggressive drop
+	db.Exec("PRAGMA foreign_keys = OFF")
+
+	// Drop all objects (Tables, Indexes, Views, Triggers)
+	rows, _ := db.Query("SELECT name, type FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")
+	for rows.Next() {
+		var name, objType string
+		rows.Scan(&name, &objType)
+		db.Exec(fmt.Sprintf("DROP %s IF EXISTS %s", objType, name))
+	}
+	rows.Close()
+	
+	db.Exec("PRAGMA foreign_keys = ON")
+
+	return c.JSON(fiber.Map{"success": true, "message": "Shard totally wiped. Re-initialization required on close."})
+}
+
+// InitializeInfrastructureShard re-runs migrations for a shard based on its role
+func InitializeInfrastructureShard(c *fiber.Ctx) error {
+	id := c.Params("id")
 	
 	var shard struct {
 		URL   string `db:"db_url"`
@@ -226,15 +268,6 @@ func ClearInfrastructureShard(c *fiber.Ctx) error {
 	}
 	defer db.Close()
 
-	// Drop all tables
-	rows, _ := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-	for rows.Next() {
-		var name string
-		rows.Scan(&name)
-		db.Exec("DROP TABLE IF EXISTS " + name)
-	}
-	rows.Close()
-
 	// Re-run migrations based on type
 	switch shard.Type {
 	case "global_manager":
@@ -247,7 +280,7 @@ func ClearInfrastructureShard(c *fiber.Ctx) error {
 		database.InitUserSchema(db)
 	}
 
-	return c.JSON(fiber.Map{"success": true, "message": "Shard successfully cleared and re-initialized"})
+	return c.JSON(fiber.Map{"success": true, "message": "Shard re-initialized with " + shard.Type + " schema"})
 }
 
 // RemoveInfrastructureShard deletes a master shard from Core Master

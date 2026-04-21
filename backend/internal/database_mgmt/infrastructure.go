@@ -76,10 +76,7 @@ func AddInfrastructureShard(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to save shard: " + err.Error()})
 	}
 
-	// 5. Hot-Attach Shard to Active Fleet
-	go database.Router.RegisterShardDynamically(req.Type, req.URL, req.Token)
-
-	return c.JSON(fiber.Map{"success": true, "message": "Infrastructure shard registered and attached successfully"})
+	return c.JSON(fiber.Map{"success": true, "message": "Infrastructure shard registered successfully"})
 }
 
 // RemoveInfrastructureShard deletes a master shard from Core Master

@@ -174,30 +174,38 @@ export default function InfrastructurePage() {
               <p>Expand your infrastructure capacity dynamically.</p>
             </div>
             <form onSubmit={handleAddShard}>
-              <div className={styles.formRow}>
-                <div className={styles.formGroup}>
-                  <label>Display Name</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Global Manager 2" 
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    required
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Shard Type</label>
-                  <select 
-                    value={formData.type}
-                    onChange={(e) => setFormData({...formData, type: e.target.value})}
-                  >
-                    <option value="global_manager">Global Manager</option>
-                    <option value="auth">Auth Shard</option>
-                    <option value="analytics">Analytics Shard</option>
-                    <option value="user">User Shard</option>
-                  </select>
+              <div className={styles.formGroup}>
+                <label>Shard Infrastructure Role</label>
+                <div className={styles.typeSelectorGrid}>
+                  {[
+                    { id: "global_manager", label: "Global Manager", icon: "🌐" },
+                    { id: "user", label: "User Shard", icon: "👥" },
+                    { id: "auth", label: "Auth Shard", icon: "🔐" },
+                    { id: "analytics", label: "Analytics Shard", icon: "📈" }
+                  ].map((t) => (
+                    <div 
+                      key={t.id} 
+                      className={`${styles.typeOption} ${formData.type === t.id ? styles.typeOptionActive : ""}`}
+                      onClick={() => setFormData({...formData, type: t.id})}
+                    >
+                      <span className={styles.typeOptionIcon}>{t.icon}</span>
+                      <span className={styles.typeOptionLabel}>{t.label}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
+
+              <div className={styles.formGroup}>
+                <label>Display Name</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Asia-Pacific Primary Shard" 
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  required
+                />
+              </div>
+
               <div className={styles.formGroup}>
                 <label>Turso DB URL</label>
                 <input 
@@ -208,6 +216,7 @@ export default function InfrastructurePage() {
                   required
                 />
               </div>
+
               <div className={styles.formGroup}>
                 <label>Turso Auth Token</label>
                 <input 

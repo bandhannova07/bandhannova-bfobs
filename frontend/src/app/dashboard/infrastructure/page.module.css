@@ -278,6 +278,59 @@
   color: #999;
 }
 
+/* Shard Type Selector Grid */
+.typeSelectorGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.typeOption {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.typeOption:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.typeOptionActive {
+  background: rgba(0, 198, 255, 0.1) !important;
+  border-color: #00c6ff !important;
+  box-shadow: 0 0 15px rgba(0, 198, 255, 0.2);
+}
+
+.typeOptionIcon {
+  font-size: 1.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.typeOptionLabel {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #ccc;
+}
+
+.typeOptionActive .typeOptionLabel {
+  color: #fff;
+}
+
 .formGroup input, .formGroup select {
   width: 100%;
   background: rgba(255, 255, 255, 0.04);

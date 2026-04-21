@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import styles from "./page.module.css";
-import { getShards, addShard, removeShard } from "../../../lib/api";
+import { getShards, addShard, updateShard, removeShard } from "../../../lib/api";
 
 interface Shard {
   id: string;

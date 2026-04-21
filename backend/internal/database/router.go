@@ -6,6 +6,8 @@ import (
 	"hash/fnv"
 	"log"
 	"sync"
+
+	"github.com/bandhannova/api-hunter/internal/security"
 )
 
 // ShardType represents the category of a database shard

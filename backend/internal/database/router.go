@@ -15,6 +15,7 @@ const (
 	ShardAuth           ShardType = "auth"
 	ShardAnalytics      ShardType = "analytics"
 	ShardGlobalManager  ShardType = "global"
+	ShardCoreMaster     ShardType = "core"
 	ShardUser           ShardType = "user"
 )
 
@@ -74,12 +75,14 @@ type ShardRouter struct {
 	mu              sync.RWMutex
 	authDB          *sql.DB
 	analyticsDB     *sql.DB
-	globalManagerDB *sql.DB
+	coreMasterDB    *sql.DB
+	globalManagerDBs []*sql.DB
 	userDBs         []*sql.DB
 
 	coreAuthDB          *sql.DB
 	coreAnalyticsDB     *sql.DB
-	coreGlobalManagerDB *sql.DB
+	coreCoreMasterDB    *sql.DB
+	coreGlobalManagerDBs []*sql.DB
 	coreUserDBs         []*sql.DB
 
 	managedDBs map[string]ManagedDB
@@ -87,7 +90,7 @@ type ShardRouter struct {
 
 var Router *ShardRouter
 
-func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, globalURL, globalToken string, userURLs, userTokens []string) error {
+func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, coreURL, coreToken string, globalURLs, globalTokens, userURLs, userTokens []string) error {
 	router := &ShardRouter{}
 	var err error
 
@@ -105,13 +108,27 @@ func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, globalURL
 		}
 	}
 
-	if globalURL != "" {
-		router.globalManagerDB, err = ConnectTurso(globalURL, globalToken)
+	if coreURL != "" {
+		router.coreMasterDB, err = ConnectTurso(coreURL, coreToken)
 		if err != nil {
-			return fmt.Errorf("global manager shard connection failed: %w", err)
+			log.Printf("⚠️ Core Master shard connection failed: %v", err)
 		}
-	} else {
-		return fmt.Errorf("global manager URL is required")
+	}
+
+	for i, url := range globalURLs {
+		if url == "" {
+			continue
+		}
+		db, err := ConnectTurso(url, globalTokens[i])
+		if err != nil {
+			log.Printf("⚠️ Global Manager shard %d connection failed: %v", i, err)
+			continue
+		}
+		router.globalManagerDBs = append(router.globalManagerDBs, db)
+	}
+
+	if len(router.globalManagerDBs) == 0 {
+		return fmt.Errorf("at least one global manager shard is required")
 	}
 
 	for i, url := range userURLs {
@@ -128,18 +145,39 @@ func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, globalURL
 
 	router.coreAuthDB = router.authDB
 	router.coreAnalyticsDB = router.analyticsDB
-	router.coreGlobalManagerDB = router.globalManagerDB
+	router.coreCoreMasterDB = router.coreMasterDB
+	router.coreGlobalManagerDBs = append([]*sql.DB{}, router.globalManagerDBs...)
 	router.coreUserDBs = append([]*sql.DB{}, router.userDBs...)
 	router.managedDBs = make(map[string]ManagedDB)
 
 	Router = router
-	log.Printf("🧠 Shard Router Ready: [Auth, Analytics, GlobalManager, %d User Shards]", len(router.userDBs))
+	log.Printf("🧠 Shard Router Ready: [CoreMaster, %d GlobalManager, %d User Shards]", len(router.globalManagerDBs), len(router.userDBs))
 	return nil
 }
 
 func (sr *ShardRouter) GetAuthDB() *sql.DB             { return sr.authDB }
 func (sr *ShardRouter) GetAnalyticsDB() *sql.DB        { return sr.analyticsDB }
-func (sr *ShardRouter) GetGlobalManagerDB() *sql.DB    { return sr.globalManagerDB }
+func (sr *ShardRouter) GetCoreMasterDB() *sql.DB       { return sr.coreMasterDB }
+
+func (sr *ShardRouter) GetGlobalManagerDB() *sql.DB {
+	// Default to first shard if no slug provided
+	if len(sr.globalManagerDBs) == 0 {
+		return nil
+	}
+	return sr.globalManagerDBs[0]
+}
+
+func (sr *ShardRouter) GetGlobalManagerDBBySlug(slug string) *sql.DB {
+	sr.mu.RLock()
+	defer sr.mu.RUnlock()
+	if len(sr.globalManagerDBs) == 0 {
+		return nil
+	}
+	h := fnv.New32a()
+	h.Write([]byte(slug))
+	idx := int(h.Sum32()) % len(sr.globalManagerDBs)
+	return sr.globalManagerDBs[idx]
+}
 
 func (sr *ShardRouter) GetUserDB(userID string) *sql.DB {
 	sr.mu.RLock()
@@ -178,8 +216,10 @@ func (sr *ShardRouter) ReloadDynamicDBs(dbs []ManagedDB) {
 	defer sr.mu.Unlock()
 	sr.authDB = sr.coreAuthDB
 	sr.analyticsDB = sr.coreAnalyticsDB
-	sr.globalManagerDB = sr.coreGlobalManagerDB
+	sr.coreMasterDB = sr.coreCoreMasterDB
+	sr.globalManagerDBs = append([]*sql.DB{}, sr.coreGlobalManagerDBs...)
 	sr.userDBs = append([]*sql.DB{}, sr.coreUserDBs...)
+	
 	newManaged := make(map[string]ManagedDB)
 	for _, mdb := range dbs {
 		newManaged[mdb.Slug] = mdb
@@ -188,8 +228,10 @@ func (sr *ShardRouter) ReloadDynamicDBs(dbs []ManagedDB) {
 			sr.authDB = mdb.DB
 		case "analytics":
 			sr.analyticsDB = mdb.DB
+		case "core":
+			sr.coreMasterDB = mdb.DB
 		case "global":
-			sr.globalManagerDB = mdb.DB
+			sr.globalManagerDBs = append(sr.globalManagerDBs, mdb.DB)
 		case "user":
 			sr.userDBs = append(sr.userDBs, mdb.DB)
 		}
@@ -210,7 +252,10 @@ func (sr *ShardRouter) GetManagedDBBySlug(slug string) *sql.DB {
 		return sr.coreAnalyticsDB
 	}
 	if slug == "core-global" {
-		return sr.coreGlobalManagerDB
+		return sr.GetGlobalManagerDB()
+	}
+	if slug == "core-master" {
+		return sr.coreCoreMasterDB
 	}
 	return nil
 }

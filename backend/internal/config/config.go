@@ -17,12 +17,14 @@ type Config struct {
 	TavilyKeys           []string
 	GroqKeys             []string
 	// BFOBS Turso Shards
+	TursoCoreURL         string
+	TursoCoreToken       string
 	TursoAuthURL         string
 	TursoAuthToken       string
 	TursoAnalyticsURL    string
 	TursoAnalyticsToken  string
-	TursoGlobalURL       string
-	TursoGlobalToken     string
+	TursoGlobalURLs      []string
+	TursoGlobalTokens    []string
 	TursoUserShardURLs   []string
 	TursoUserShardTokens []string
 	// Email Proxy Keys
@@ -59,12 +61,14 @@ func LoadConfig() {
 		TavilyKeys:           getEnvAsSlice("TAVILY_KEYS", ","),
 		GroqKeys:             getEnvAsSlice("GROQ_KEYS", ","),
 		// BFOBS Turso Shards
+		TursoCoreURL:         getEnv("TURSO_CORE_URL", ""),
+		TursoCoreToken:       getEnv("TURSO_CORE_TOKEN", ""),
 		TursoAuthURL:         getEnv("TURSO_AUTH_URL", ""),
 		TursoAuthToken:       getEnv("TURSO_AUTH_TOKEN", ""),
 		TursoAnalyticsURL:    getEnv("TURSO_ANALYTICS_URL", ""),
 		TursoAnalyticsToken:  getEnv("TURSO_ANALYTICS_TOKEN", ""),
-		TursoGlobalURL:       getEnv("TURSO_GLOBAL_URL", ""),
-		TursoGlobalToken:     getEnv("TURSO_GLOBAL_TOKEN", ""),
+		TursoGlobalURLs:      getEnvAsSlice("TURSO_GLOBAL_URLS", ","),
+		TursoGlobalTokens:    getEnvAsSlice("TURSO_GLOBAL_TOKENS", ","),
 		TursoUserShardURLs:   getEnvAsSlice("TURSO_USER_SHARD_URLS", ","),
 		TursoUserShardTokens: getEnvAsSlice("TURSO_USER_SHARD_TOKENS", ","),
 		// Email Proxy Keys
@@ -186,6 +190,7 @@ func fallbackToInternalRegistry() {
 		}
 	}
 	*/
+	/*
 	if AppConfig.TursoGlobalURL == "" {
 		decrypted := decryptInternal(InternalRegistry["TURSO_GLOBAL_URL"], master)
 		if len(decrypted) > 0 {
@@ -198,6 +203,7 @@ func fallbackToInternalRegistry() {
 			AppConfig.TursoGlobalToken = decrypted[0]
 		}
 	}
+	*/
 	/*
 	if len(AppConfig.TursoUserShardURLs) == 0 {
 		AppConfig.TursoUserShardURLs = decryptInternal(InternalRegistry["TURSO_USER_SHARD_URLS"], master)

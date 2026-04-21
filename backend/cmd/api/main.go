@@ -29,7 +29,8 @@ func main() {
 	err := database.InitShardRouter(
 		config.AppConfig.TursoAuthURL, config.AppConfig.TursoAuthToken,
 		config.AppConfig.TursoAnalyticsURL, config.AppConfig.TursoAnalyticsToken,
-		config.AppConfig.TursoGlobalURL, config.AppConfig.TursoGlobalToken,
+		config.AppConfig.TursoCoreURL, config.AppConfig.TursoCoreToken,
+		config.AppConfig.TursoGlobalURLs, config.AppConfig.TursoGlobalTokens,
 		config.AppConfig.TursoUserShardURLs, config.AppConfig.TursoUserShardTokens,
 	)
 	if err != nil {

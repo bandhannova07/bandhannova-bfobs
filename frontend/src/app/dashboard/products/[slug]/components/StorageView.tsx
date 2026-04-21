@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import styles from "../page.module.css";
 
-import { API_URL } from "../../../../lib/constants";
+import { API_URL } from "@/lib/constants";
 
 interface Product {
   name: string;

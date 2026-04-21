@@ -2,6 +2,7 @@ package database_mgmt
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/bandhannova/api-hunter/internal/config"

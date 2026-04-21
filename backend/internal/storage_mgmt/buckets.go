@@ -11,6 +11,17 @@ import (
     "strings"
 )
 
+const StorageAssetsSchema = `
+CREATE TABLE IF NOT EXISTS storage_assets (
+    id TEXT PRIMARY KEY,
+    bucket_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    path TEXT NOT NULL,
+    size INTEGER,
+    content_type TEXT,
+    created_at INTEGER NOT NULL
+);`
+
 type Bucket struct {
 	ID          string `json:"id"`
 	ProductID   string `json:"product_id"`
@@ -20,6 +31,7 @@ type Bucket struct {
 	IsPublic    bool   `json:"is_public"`
 	CreatedAt   int64  `json:"created_at"`
 }
+
 
 // ListBuckets returns all buckets for a specific product
 func ListBuckets(c *fiber.Ctx) error {
@@ -158,7 +170,7 @@ func ListBucketFiles(c *fiber.Ctx) error {
 	productSlug := c.Params("product_slug")
 	bucketSlug := c.Params("bucket_slug")
 
-	// Resolve bucket ID
+	// 1. Resolve bucket ID from Global DB
 	var bucketID string
 	err := database.Router.GetGlobalManagerDB().QueryRow(
 		"SELECT b.id FROM storage_buckets b JOIN managed_products p ON b.product_id = p.id WHERE p.slug = ? AND b.slug = ?",
@@ -169,12 +181,21 @@ func ListBucketFiles(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Bucket not found"})
 	}
 
-	rows, err := database.Router.GetGlobalManagerDB().Query(
+	// 2. Select the Database (Dedicated Product DB or Global Fallback)
+	db := database.Router.GetManagedDBBySlug(productSlug)
+	if db == nil {
+		db = database.Router.GetGlobalManagerDB()
+	}
+
+	// Ensure table exists in target DB
+	_, _ = db.Exec(StorageAssetsSchema)
+
+	rows, err := db.Query(
 		"SELECT id, name, path, size, content_type, created_at FROM storage_assets WHERE bucket_id = ? ORDER BY created_at DESC",
 		bucketID,
 	)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to fetch assets"})
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to fetch assets from DB"})
 	}
 	defer rows.Close()
 
@@ -187,7 +208,6 @@ func ListBucketFiles(c *fiber.Ctx) error {
 			continue
 		}
 
-		// Map to a format the frontend understands (mimicking HF Tree API structure for compatibility)
 		files = append(files, fiber.Map{
 			"id":   id,
 			"path": path,

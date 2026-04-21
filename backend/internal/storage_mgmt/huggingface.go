@@ -165,9 +165,18 @@ func UploadToHuggingFace(c *fiber.Ctx) error {
 		).Scan(&bucketID)
 		
 		if err == nil {
+			// Get target DB (Product-dedicated or Global fallback)
+			db := database.Router.GetManagedDBBySlug(productSlug)
+			if db == nil {
+				db = database.Router.GetGlobalManagerDB()
+			}
+
+			// Ensure table exists
+			_, _ = db.Exec(StorageAssetsSchema)
+
 			assetID := uuid.New().String()
 			contentType := file.Header.Get("Content-Type")
-			_, _ = database.Router.GetGlobalManagerDB().Exec(
+			_, _ = db.Exec(
 				"INSERT INTO storage_assets (id, bucket_id, name, path, size, content_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 				assetID, bucketID, fileName, hfPath, file.Size, contentType, time.Now().Unix(),
 			)

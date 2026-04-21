@@ -83,8 +83,8 @@ func LoadConfig() {
 		SupabaseURL:          getEnv("SUPABASE_URL", ""),
 		SupabaseJWTSecret:    getEnv("SUPABASE_JWT_SECRET", ""),
 		PublicURL:            getEnv("PUBLIC_URL", ""),
-		TursoOrg:             getEnv("TURSO_ORG", ""),
-		TursoAPIToken:        getEnv("TURSO_API_TOKEN", ""),
+		TursoOrg:             getEnv("TURSO_ORG", getEnv("TURSO_ORGANIZATION", "")),
+		TursoAPIToken:        getEnv("TURSO_API_TOKEN", getEnv("TURSO_TOKEN", getEnv("TURSO_PLATFORM_TOKEN", ""))),
 		HFToken:              getEnv("HF_TOKEN", ""),
 		HFStorageRepo:        getEnv("HF_STORAGE_REPO", ""),
 	}

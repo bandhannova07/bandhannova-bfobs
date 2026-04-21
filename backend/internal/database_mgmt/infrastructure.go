@@ -90,6 +90,50 @@ func AddInfrastructureShard(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "message": "Infrastructure shard registered successfully"})
 }
 
+// UpdateInfrastructureShard modifies an existing master shard
+func UpdateInfrastructureShard(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "ID is required"})
+	}
+
+	var req ShardRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid payload"})
+	}
+
+	if database.Router == nil || database.Router.GetCoreMasterDB() == nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Core Master not connected"})
+	}
+
+	now := time.Now().Unix()
+
+	// If token is provided, encrypt it. Otherwise keep old one.
+	if req.Token != "" {
+		encrypted, err := security.Encrypt(req.Token, config.AppConfig.BandhanNovaMasterKey)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": true, "message": "Encryption failed"})
+		}
+		_, err = database.Router.GetCoreMasterDB().Exec(
+			"UPDATE infrastructure_shards SET name = ?, type = ?, db_url = ?, encrypted_token = ?, updated_at = ? WHERE id = ?",
+			req.Name, req.Type, req.URL, encrypted, now, id,
+		)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": true, "message": "Update failed"})
+		}
+	} else {
+		_, err := database.Router.GetCoreMasterDB().Exec(
+			"UPDATE infrastructure_shards SET name = ?, type = ?, db_url = ?, updated_at = ? WHERE id = ?",
+			req.Name, req.Type, req.URL, now, id,
+		)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": true, "message": "Update failed"})
+		}
+	}
+
+	return c.JSON(fiber.Map{"success": true, "message": "Infrastructure shard updated"})
+}
+
 // RemoveInfrastructureShard deletes a master shard from Core Master
 func RemoveInfrastructureShard(c *fiber.Ctx) error {
 	id := c.Params("id")

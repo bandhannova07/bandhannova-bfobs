@@ -36,6 +36,7 @@ const getTypeColor = (type: string) => {
 export default function InfrastructurePage() {
   const [shards, setShards] = useState<Shard[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingShard, setEditingShard] = useState<Shard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -62,18 +63,40 @@ export default function InfrastructurePage() {
     setIsLoading(false);
   };
 
-  const handleAddShard = async (e: React.FormEvent) => {
+  const handleOpenAdd = () => {
+    setEditingShard(null);
+    setFormData({ name: "", type: "global_manager", db_url: "", token: "" });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (shard: Shard) => {
+    setEditingShard(shard);
+    setFormData({ 
+      name: shard.name, 
+      type: shard.type, 
+      db_url: shard.db_url, 
+      token: "" // Don't show encrypted token
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await addShard(formData);
+      let res;
+      if (editingShard) {
+        res = await updateShard(editingShard.id, formData);
+      } else {
+        res = await addShard(formData);
+      }
+      
       if (res.success) {
         setIsModalOpen(false);
-        setFormData({ name: "", type: "global_manager", db_url: "", token: "" });
         loadShards();
       }
     } catch (error: any) {
-      alert(error.message || "Failed to register shard. Verify credentials.");
+      alert(error.message || "Operation failed. Verify credentials.");
     } finally {
       setIsSubmitting(false);
     }
@@ -98,7 +121,7 @@ export default function InfrastructurePage() {
           <h2 className={styles.title}>Infrastructure Fleet</h2>
           <p className={styles.subtitle}>Manage the master shards orchestrating the BandhanNova ecosystem.</p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className={styles.addBtn}>
+        <button onClick={handleOpenAdd} className={styles.addBtn}>
           <span className={styles.plusIcon}>+</span> Register Master Shard
         </button>
       </div>
@@ -110,7 +133,7 @@ export default function InfrastructurePage() {
         </div>
       ) : (
         <div className={styles.grid}>
-          {/* Core Master Card (Virtual representation of the env-based one) */}
+          {/* Core Master Card ... unchanged ... */}
           <div className={`${styles.card} ${styles.coreCard}`}>
             <div className={styles.cardGlow}></div>
             <div className={styles.cardHeader}>
@@ -145,13 +168,22 @@ export default function InfrastructurePage() {
                   <div className={styles.statusDot}></div>
                   {shard.status === "active" ? "Connected" : shard.status}
                 </div>
-                <button 
-                  onClick={() => handleDeleteShard(shard.id)} 
-                  className={styles.removeBtn}
-                  title="Decommission Shard"
-                >
-                  Decommission
-                </button>
+                <div className={styles.cardActions}>
+                  <button 
+                    onClick={() => handleOpenEdit(shard)} 
+                    className={styles.editBtn}
+                    title="Edit Shard Configuration"
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteShard(shard.id)} 
+                    className={styles.removeBtn}
+                    title="Decommission Shard"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -170,10 +202,10 @@ export default function InfrastructurePage() {
         <div className={styles.modalOverlay}>
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
-              <h3 className={styles.modalTitle}>Register New Shard</h3>
-              <p>Expand your infrastructure capacity dynamically.</p>
+              <h3 className={styles.modalTitle}>{editingShard ? "Update Shard" : "Register New Shard"}</h3>
+              <p>{editingShard ? "Modify existing infrastructure configuration." : "Expand your infrastructure capacity dynamically."}</p>
             </div>
-            <form onSubmit={handleAddShard}>
+            <form onSubmit={handleSubmit}>
               <div className={styles.formGroup}>
                 <label>Shard Infrastructure Role</label>
                 <div className={styles.typeSelectorGrid}>
@@ -218,19 +250,19 @@ export default function InfrastructurePage() {
               </div>
 
               <div className={styles.formGroup}>
-                <label>Turso Auth Token</label>
+                <label>Turso Auth Token {editingShard && <span style={{fontSize: '0.7rem', color: '#666'}}>(Optional - leave blank to keep current)</span>}</label>
                 <input 
                   type="password" 
-                  placeholder="Paste secure token here" 
+                  placeholder={editingShard ? "••••••••••••" : "Paste secure token here"} 
                   value={formData.token}
                   onChange={(e) => setFormData({...formData, token: e.target.value})}
-                  required
+                  required={!editingShard}
                 />
               </div>
               <div className={styles.modalActions}>
                 <button type="button" onClick={() => setIsModalOpen(false)} className={styles.cancelBtn}>Discard</button>
                 <button type="submit" className={styles.submitBtn} disabled={isSubmitting}>
-                  {isSubmitting ? "Syncing..." : "Connect Shard"}
+                  {isSubmitting ? "Syncing..." : editingShard ? "Update Shard" : "Connect Shard"}
                 </button>
               </div>
             </form>

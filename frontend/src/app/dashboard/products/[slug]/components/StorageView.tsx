@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import styles from "../page.module.css";
 
+import { API_URL } from "../../../../lib/constants";
+
 interface Product {
   name: string;
   slug: string;
@@ -30,7 +32,7 @@ export default function StorageView({ product }: StorageViewProps) {
 
     try {
       const token = sessionStorage.getItem("admin_token");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/v1/storage/upload`, {
+      const res = await fetch(`${API_URL}/storage/upload`, {
         method: "POST",
         headers: { "X-Admin-Token": token || "" },
         body: formData

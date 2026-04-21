@@ -92,6 +92,68 @@ type ShardRouter struct {
 
 var Router *ShardRouter
 
+	// RefreshFleet re-loads all infrastructure shards from the Core Master registry
+func (r *ShardRouter) RefreshFleet(masterKey string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	log.Println("♻️  Refreshing Infrastructure Fleet Registry...")
+
+	// Clear current dynamic pools (keep core ones if any)
+	r.authDBs = nil
+	r.analyticsDBs = nil
+	r.globalManagerDBs = nil
+	r.userDBs = nil
+
+	// Add Core Master to global managers by default
+	if r.coreMasterDB != nil {
+		r.globalManagerDBs = append(r.globalManagerDBs, r.coreMasterDB)
+	}
+
+	rows, err := r.coreMasterDB.Query("SELECT id, name, type, db_url, encrypted_token FROM infrastructure_shards")
+	if err != nil {
+		return fmt.Errorf("failed to query fleet registry: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id, name, sType, dbURL, encryptedToken string
+		if err := rows.Scan(&id, &name, &sType, &dbURL, &encryptedToken); err != nil {
+			continue
+		}
+
+		token, err := security.Decrypt(encryptedToken, masterKey)
+		if err != nil {
+			log.Printf("⚠️  Failed to decrypt token for shard %s: %v", name, err)
+			continue
+		}
+
+		connStr := fmt.Sprintf("%s?authToken=%s", dbURL, token)
+		db, err := sql.Open("libsql", connStr)
+		if err != nil {
+			log.Printf("⚠️  Failed to connect to fleet shard %s: %v", name, err)
+			continue
+		}
+
+		// Distribute into pools
+		switch sType {
+		case "auth":
+			r.authDBs = append(r.authDBs, db)
+		case "analytics":
+			r.analyticsDBs = append(r.analyticsDBs, db)
+		case "global_manager":
+			r.globalManagerDBs = append(r.globalManagerDBs, db)
+		case "user":
+			r.userDBs = append(r.userDBs, db)
+		}
+	}
+
+	log.Printf("✅ Fleet Registry Synced: %d Global, %d Auth, %d Analytics, %d User nodes online", 
+		len(r.globalManagerDBs), len(r.authDBs), len(r.analyticsDBs), len(r.userDBs))
+	
+	return nil
+}
+
 func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, coreURL, coreToken string, masterKey string) error {
 	router := &ShardRouter{}
 	var err error
@@ -112,71 +174,29 @@ func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, coreURL, 
 		return fmt.Errorf("TURSO_CORE_URL is required for bootstrapping")
 	}
 
-	// 2. Fetch Global Manager Shards from Infrastructure Registry
-	rows, err := router.coreMasterDB.Query("SELECT id, name, type, db_url, encrypted_token FROM infrastructure_shards WHERE status = 'active'")
-	if err != nil {
-		log.Printf("⚠️ Failed to query infrastructure shards: %v", err)
-	} else {
-		defer rows.Close()
-		for rows.Next() {
-			var id, name, sType, dbURL, encrypted string
-			if err := rows.Scan(&id, &name, &sType, &dbURL, &encrypted); err != nil {
-				continue
-			}
-
-			token, err := security.Decrypt(encrypted, masterKey)
-			if err != nil {
-				log.Printf("⚠️ Failed to decrypt shard token for %s: %v", name, err)
-				continue
-			}
-
-			db, err := ConnectTurso(dbURL, token)
-			if err != nil {
-				log.Printf("⚠️ Failed to connect to shard %s: %v", name, err)
-				continue
-			}
-
-			switch sType {
-			case "global_manager":
-				router.globalManagerDBs = append(router.globalManagerDBs, db)
-			case "auth":
-				router.authDBs = append(router.authDBs, db)
-			case "analytics":
-				router.analyticsDBs = append(router.analyticsDBs, db)
-			case "user":
-				router.userDBs = append(router.userDBs, db)
-			}
-		}
-	}
-
-	// 3. Fallback to Env-based Auth/Analytics if not found in Registry
-	if len(router.authDBs) == 0 && authURL != "" {
-		db, _ := ConnectTurso(authURL, authToken)
-		if db != nil {
-			router.authDBs = append(router.authDBs, db)
-		}
-	}
-	if len(router.analyticsDBs) == 0 && analyticsURL != "" {
-		db, _ := ConnectTurso(analyticsURL, analyticsToken)
-		if db != nil {
-			router.analyticsDBs = append(router.analyticsDBs, db)
-		}
-	}
-
-	if len(router.globalManagerDBs) == 0 {
-		log.Println("⚠️ No Global Manager shards found in registry. System functionality will be limited.")
-	}
-
-	router.coreAuthDBs = append([]*sql.DB{}, router.authDBs...)
-	router.coreAnalyticsDBs = append([]*sql.DB{}, router.analyticsDBs...)
-	router.coreCoreMasterDB = router.coreMasterDB
-	router.coreGlobalManagerDBs = append([]*sql.DB{}, router.globalManagerDBs...)
-	router.coreUserDBs = append([]*sql.DB{}, router.userDBs...)
 	router.managedDBs = make(map[string]ManagedDB)
-
 	Router = router
-	log.Printf("🧠 Shard Router Ready: [CoreMaster, %d Auth, %d Analytics, %d GlobalManager, %d User Shards]", 
-		len(router.authDBs), len(router.analyticsDBs), len(router.globalManagerDBs), len(router.userDBs))
+
+	// 2. Load all other shards from the registry
+	if err := Router.RefreshFleet(masterKey); err != nil {
+		log.Printf("⚠️ Initial fleet sync failed: %v", err)
+	}
+
+	// 3. Fallback: If no shards found in registry but env vars exist, add them
+	Router.mu.Lock()
+	if len(Router.authDBs) == 0 && authURL != "" {
+		db, _ := ConnectTurso(authURL, authToken)
+		if db != nil { Router.authDBs = append(Router.authDBs, db) }
+	}
+	if len(Router.analyticsDBs) == 0 && analyticsURL != "" {
+		db, _ := ConnectTurso(analyticsURL, analyticsToken)
+		if db != nil { Router.analyticsDBs = append(Router.analyticsDBs, db) }
+	}
+	Router.mu.Unlock()
+
+	log.Printf("🧠 Shard Router Initialized: %d Global, %d Auth, %d Analytics, %d User nodes online", 
+		len(Router.globalManagerDBs), len(Router.authDBs), len(Router.analyticsDBs), len(Router.userDBs))
+	
 	return nil
 }
 

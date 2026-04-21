@@ -89,6 +89,9 @@ func AddInfrastructureShard(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Database write failed: " + err.Error()})
 	}
 
+	// Hot-reload fleet registry
+	go database.Router.RefreshFleet(config.AppConfig.BandhanNovaMasterKey)
+
 	return c.JSON(fiber.Map{"success": true, "message": "Infrastructure shard registered successfully"})
 }
 
@@ -132,6 +135,9 @@ func UpdateInfrastructureShard(c *fiber.Ctx) error {
 			return c.Status(500).JSON(fiber.Map{"error": true, "message": "Update failed"})
 		}
 	}
+
+	// Hot-reload fleet registry
+	go database.Router.RefreshFleet(config.AppConfig.BandhanNovaMasterKey)
 
 	return c.JSON(fiber.Map{"success": true, "message": "Infrastructure shard updated"})
 }
@@ -307,6 +313,9 @@ func RemoveInfrastructureShard(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to remove shard"})
 	}
+
+	// Hot-reload fleet registry
+	go database.Router.RefreshFleet(config.AppConfig.BandhanNovaMasterKey)
 
 	return c.JSON(fiber.Map{"success": true, "message": "Infrastructure shard removed"})
 }

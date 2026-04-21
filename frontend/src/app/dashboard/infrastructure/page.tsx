@@ -72,8 +72,8 @@ export default function InfrastructurePage() {
         setFormData({ name: "", type: "global_manager", db_url: "", token: "" });
         loadShards();
       }
-    } catch (error) {
-      alert("Failed to register shard. Verify credentials.");
+    } catch (error: any) {
+      alert(error.message || "Failed to register shard. Verify credentials.");
     } finally {
       setIsSubmitting(false);
     }

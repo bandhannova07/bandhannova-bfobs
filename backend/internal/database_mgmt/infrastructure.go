@@ -59,10 +59,21 @@ func AddInfrastructureShard(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "URL, Token and Type are required"})
 	}
 
+	if database.Router == nil || database.Router.GetCoreMasterDB() == nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Core Master not connected. Check HF Secrets."})
+	}
+
+	// Self-healing: Ensure table exists
+	database.InitInfrastructureSchema(database.Router.GetCoreMasterDB())
+
 	// Encrypt Token using Master Key
+	if config.AppConfig.BandhanNovaMasterKey == "" {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "BANDHANNOVA_MASTER_KEY is missing on server"})
+	}
+
 	encrypted, err := security.Encrypt(req.Token, config.AppConfig.BandhanNovaMasterKey)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Encryption failed"})
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Encryption failed: " + err.Error()})
 	}
 
 	id := uuid.New().String()
@@ -73,7 +84,7 @@ func AddInfrastructureShard(c *fiber.Ctx) error {
 		id, req.Name, req.Type, req.URL, encrypted, now, now,
 	)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to save shard: " + err.Error()})
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Database write failed: " + err.Error()})
 	}
 
 	return c.JSON(fiber.Map{"success": true, "message": "Infrastructure shard registered successfully"})

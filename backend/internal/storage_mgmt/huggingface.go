@@ -163,6 +163,7 @@ func UploadToHuggingFace(c *fiber.Ctx) error {
 			"path": hfPath,
 			"url":  rawUrl,
 			"size": file.Size,
+		},
 	})
 }
 

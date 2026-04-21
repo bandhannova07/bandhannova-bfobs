@@ -1,9 +1,7 @@
 package storage_mgmt
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/bandhannova/api-hunter/internal/config"

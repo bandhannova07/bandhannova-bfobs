@@ -58,12 +58,6 @@ func ReloadManagedDatabases() error {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	// Fetch from all Global Manager shards
-	gDBs := config.AppConfig.TursoGlobalURLs
-	for i := range gDBs {
-		db := database.Router.GetGlobalManagerDBBySlug(fmt.Sprintf("gm-%d", i)) // Dummy slug for routing or just iterate
-		// Since we don't have slugs for GM shards yet, let's just get them from the internal slice
-	}
 
 	// Actually, let's just use the router's globalManagerDBs slice
 	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {

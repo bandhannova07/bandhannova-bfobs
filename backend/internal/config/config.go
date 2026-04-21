@@ -206,7 +206,6 @@ func fallbackToInternalRegistry() {
 		}
 	}
 	*/
-	/*
 	if len(AppConfig.TursoUserShardURLs) == 0 {
 		AppConfig.TursoUserShardURLs = decryptInternal(InternalRegistry["TURSO_USER_SHARD_URLS"], master)
 	}

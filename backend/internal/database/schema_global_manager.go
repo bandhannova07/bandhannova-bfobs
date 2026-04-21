@@ -117,6 +117,19 @@ CREATE TABLE IF NOT EXISTS api_usage_logs (
     FOREIGN KEY (key_id) REFERENCES managed_api_keys(id),
     FOREIGN KEY (card_id) REFERENCES api_cards(id)
 );
+
+CREATE TABLE IF NOT EXISTS storage_buckets (
+    id TEXT PRIMARY KEY,
+    product_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    description TEXT,
+    is_public INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (product_id) REFERENCES managed_products(id) ON DELETE CASCADE,
+    UNIQUE(product_id, slug)
+);
+
 `
 
 // InitGlobalManagerSchema applies the global manager schema and handles migrations

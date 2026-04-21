@@ -29,9 +29,16 @@ func SetupRoutes(app *fiber.App) {
 
 	v1 := app.Group("/v1", middleware.RedisRateLimiter(60, time.Minute))
 
-	// Cloud Storage (Hugging Face)
-	v1.Post("/storage/upload", middleware.AdminAuthRequired(), storage_mgmt.UploadToHuggingFace)
-	v1.Post("/storage/create", middleware.AdminAuthRequired(), storage_mgmt.CreateHuggingFaceRepo)
+	// Cloud Storage System
+	storage := v1.Group("/storage", middleware.AdminAuthRequired())
+	storage.Post("/upload", storage_mgmt.UploadToHuggingFace)
+	storage.Post("/create", storage_mgmt.CreateHuggingFaceRepo)
+	
+	// Bucket Management
+	storage.Get("/p/:product_slug/buckets", storage_mgmt.ListBuckets)
+	storage.Post("/p/:product_slug/buckets", storage_mgmt.CreateBucket)
+	storage.Delete("/buckets/:id", storage_mgmt.DeleteBucket)
+	storage.Get("/p/:product_slug/b/:bucket_slug/files", storage_mgmt.ListBucketFiles)
 
 	// OAuth 2.0 / BandhanNova ID Routes
 	oauth := v1.Group("/oauth")

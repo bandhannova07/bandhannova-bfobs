@@ -1,10 +1,15 @@
 package database_mgmt
 
 import (
+	"bytes"
+	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -486,6 +491,14 @@ func AddProduct(c *fiber.Ctx) error {
 
 	tx.Commit()
 
+	// 2. AUTOMATIC STORAGE PROVISIONING: Create HF Dataset for this product
+	go func(slug string) {
+		repoName := fmt.Sprintf("%s-storage", slug)
+		// We use a simplified internal call to create the repo
+		createHFRepoInternal(repoName, true)
+		logAudit("AUTO_STORAGE_CREATE", slug, ip, fmt.Sprintf("Auto-created HF storage for product: %s", repoName))
+	}(slug)
+
 	logAudit("ADD_PRODUCT", req.Name, ip, fmt.Sprintf("Added product: %s (Client: %s)", req.Name, clientID))
 
 	return c.JSON(fiber.Map{"success": true, "message": "Product added with OAuth credentials", "id": id, "client_id": clientID, "client_secret": clientSecret})
@@ -640,4 +653,33 @@ func logAudit(action, target, ip, details string) {
 	if err != nil {
 		log.Printf("Failed to log audit: %v", err)
 	}
+}
+
+func createHFRepoInternal(name string, private bool) {
+	token := config.AppConfig.HFToken
+	if token == "" {
+		log.Println("HF_TOKEN missing, skipping auto-storage creation")
+		return
+	}
+
+	apiUrl := "https://huggingface.co/api/repos/create"
+	payload := map[string]interface{}{
+		"name":    name,
+		"type":    "dataset",
+		"private": private,
+	}
+	
+	jsonPayload, _ := json.Marshal(payload)
+	hReq, _ := http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonPayload))
+	hReq.Header.Set("Authorization", "Bearer "+token)
+	hReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(hReq)
+	if err != nil {
+		log.Printf("Failed to auto-create HF repo: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	log.Printf("HF Auto-Provisioning: %s (Status: %d)", name, resp.StatusCode)
 }

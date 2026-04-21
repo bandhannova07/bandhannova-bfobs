@@ -30,6 +30,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// Cloud Storage (Hugging Face)
 	v1.Post("/storage/upload", middleware.AuthRequired(), storage_mgmt.UploadToHuggingFace)
+	v1.Post("/storage/create", middleware.AdminAuthRequired(), storage_mgmt.CreateHuggingFaceRepo)
 
 	// OAuth 2.0 / BandhanNova ID Routes
 	oauth := v1.Group("/oauth")

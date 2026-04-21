@@ -2,6 +2,7 @@ package storage_mgmt
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,10 +12,59 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// UploadResponse represents the response from Hugging Face
-type HFUploadResponse struct {
-	Path string `json:"path"`
-	URL  string `json:"url"`
+// CreateHuggingFaceRepo creates a new Dataset repository on Hugging Face
+func CreateHuggingFaceRepo(c *fiber.Ctx) error {
+	var req struct {
+		Name    string `json:"name"`
+		Private bool   `json:"private"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid payload"})
+	}
+
+	token := config.AppConfig.HFToken
+	if token == "" {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Hugging Face Token not configured"})
+	}
+
+	// HF API: POST /api/repos/create
+	apiUrl := "https://huggingface.co/api/repos/create"
+	payload := map[string]interface{}{
+		"name":    req.Name,
+		"type":    "dataset",
+		"private": req.Private,
+	}
+	
+	jsonPayload, _ := json.Marshal(payload)
+	hReq, err := http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create request"})
+	}
+
+	hReq.Header.Set("Authorization", "Bearer "+token)
+	hReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(hReq)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to connect to Hugging Face"})
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return c.Status(resp.StatusCode).JSON(fiber.Map{
+			"error": true,
+			"message": "Failed to create HF Dataset",
+			"details": string(body),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"message": "Cloud Storage Bucket created successfully",
+		"data":    string(body),
+	})
 }
 
 // UploadToHuggingFace sends a file to a Hugging Face repository

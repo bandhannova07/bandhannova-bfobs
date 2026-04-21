@@ -199,3 +199,45 @@ func InitializeProductFolder(slug string) {
 		defer resp.Body.Close()
 	}
 }
+
+// ProxyViewFile allows viewing private files by proxying the request with the HF Token
+func ProxyViewFile(c *fiber.Ctx) error {
+	productSlug := c.Params("product_slug")
+	fileName := c.Params("filename")
+	token := config.AppConfig.HFToken
+	repo := config.AppConfig.HFStorageRepo
+
+	if token == "" || repo == "" {
+		return c.Status(500).SendString("Storage not configured")
+	}
+
+	hfPath := fmt.Sprintf("%s/uploads/%s", productSlug, fileName)
+	apiUrl := fmt.Sprintf("https://huggingface.co/datasets/%s/resolve/main/%s", repo, hfPath)
+
+	req, err := http.NewRequest("GET", apiUrl, nil)
+	if err != nil {
+		return c.Status(500).SendString("Failed to create request")
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 300 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return c.Status(500).SendString("Failed to connect to storage")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.Status(resp.StatusCode).SendString("File not found or access denied")
+	}
+
+	// Copy headers for content type and length
+	c.Set("Content-Type", resp.Header.Get("Content-Type"))
+	c.Set("Content-Length", resp.Header.Get("Content-Length"))
+	c.Set("Cache-Control", "public, max-age=3600")
+
+	// Stream the body
+	_, err = io.Copy(c, resp.Body)
+	return err
+}

@@ -437,6 +437,40 @@ func ListProducts(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "products": products})
 }
 
+// GetProductDetails fetches a single product by its slug
+func GetProductDetails(c *fiber.Ctx) error {
+	slug := c.Params("slug")
+	if slug == "" {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Slug is required"})
+	}
+
+	var p ProductResponse
+	var appType, appURL, icon, clientID, clientSecret sql.NullString
+	err := database.Router.GetGlobalManagerDB().QueryRow(`
+		SELECT p.id, p.name, p.slug, p.app_type, p.app_url, p.description, p.icon, p.status, p.created_at, p.updated_at, c.client_id, c.client_secret
+		FROM managed_products p
+		LEFT JOIN oauth_clients c ON p.id = c.product_id
+		WHERE p.slug = ?`,
+		slug,
+	).Scan(&p.ID, &p.Name, &p.Slug, &appType, &appURL, &p.Description, &icon, &p.Status, &p.CreatedAt, &p.UpdatedAt, &clientID, &clientSecret)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.Status(404).JSON(fiber.Map{"error": true, "message": "Product not found"})
+		}
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": err.Error()})
+	}
+
+	if appType.Valid { p.AppType = appType.String }
+	if appURL.Valid { p.AppURL = appURL.String }
+	if icon.Valid { p.Icon = icon.String }
+	if clientID.Valid { p.ClientID = clientID.String }
+	if clientSecret.Valid { p.ClientSecret = clientSecret.String }
+
+	return c.JSON(fiber.Map{"success": true, "product": p})
+}
+
+// AddProduct handles creating a new product with automated OAuth and Storage provisioning
 type AddProductRequest struct {
 	Name        string `json:"name"`
 	AppType     string `json:"app_type"`

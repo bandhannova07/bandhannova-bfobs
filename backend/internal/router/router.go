@@ -85,6 +85,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// Product Management
 	adminAuth.Get("/products", database_mgmt.ListProducts)
+	adminAuth.Get("/products/:slug", database_mgmt.GetProductDetails)
 	adminAuth.Post("/products", database_mgmt.AddProduct)
 	adminAuth.Put("/products/:id", database_mgmt.UpdateProduct)
 	adminAuth.Post("/products/:id/delete", database_mgmt.DeleteProduct)

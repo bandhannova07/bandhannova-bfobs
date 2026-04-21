@@ -1,14 +1,9 @@
 package database_mgmt
 
 import (
-	"database/sql"
-	"fmt"
 	"github.com/bandhannova/api-hunter/internal/config"
 	"github.com/bandhannova/api-hunter/internal/database"
-	"github.com/bandhannova/api-hunter/internal/security"
 	"github.com/gofiber/fiber/v2"
-	"log"
-	"strings"
 )
 
 // ProxyDatabaseRequest represents a query coming from an external application
@@ -26,7 +21,7 @@ func DatabaseProxyHandler(c *fiber.Ctx) error {
 	}
 
 	// 1. Resolve Product and Verify Token
-	var productID, masterKey string
+	var productID string
 	err := database.Router.GetGlobalManagerDB().QueryRow(
 		"SELECT id FROM managed_products WHERE slug = ?", 
 		productSlug,

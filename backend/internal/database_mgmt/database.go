@@ -11,7 +11,6 @@ import (
 
 	"github.com/bandhannova/api-hunter/internal/config"
 	"github.com/bandhannova/api-hunter/internal/database"
-	"github.com/bandhannova/api-hunter/internal/modules/admin"
 	"github.com/bandhannova/api-hunter/internal/security"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -266,7 +265,7 @@ func AddDatabase(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": true, "message": "Failed to save database config"})
 	}
 
-	admin.LogAudit("ADD_DATABASE", req.Category, ip, fmt.Sprintf("Added DB: %s (%s)", finalName, req.URL))
+	logAudit("ADD_DATABASE", req.Category, ip, fmt.Sprintf("Added DB: %s (%s)", finalName, req.URL))
 
 	// Hot Reload
 	go ReloadManagedDatabases()
@@ -487,7 +486,7 @@ func AddProduct(c *fiber.Ctx) error {
 
 	tx.Commit()
 
-	admin.LogAudit("ADD_PRODUCT", req.Name, ip, fmt.Sprintf("Added product: %s (Client: %s)", req.Name, clientID))
+	logAudit("ADD_PRODUCT", req.Name, ip, fmt.Sprintf("Added product: %s (Client: %s)", req.Name, clientID))
 
 	return c.JSON(fiber.Map{"success": true, "message": "Product added with OAuth credentials", "id": id, "client_id": clientID, "client_secret": clientSecret})
 }
@@ -509,7 +508,7 @@ func UpdateProduct(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to update product"})
 	}
 
-	admin.LogAudit("UPDATE_PRODUCT", req.Name, ip, fmt.Sprintf("Updated product: %s", req.Name))
+	logAudit("UPDATE_PRODUCT", req.Name, ip, fmt.Sprintf("Updated product: %s", req.Name))
 	return c.JSON(fiber.Map{"success": true, "message": "Product updated successfully"})
 }
 
@@ -582,7 +581,7 @@ func DeleteProduct(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to delete product record"})
 	}
 
-	admin.LogAudit("DELETE_PRODUCT", pName, ip, fmt.Sprintf("DELETED PRODUCT AND WIPED SHARDS: %s", pName))
+	logAudit("DELETE_PRODUCT", pName, ip, fmt.Sprintf("DELETED PRODUCT AND WIPED SHARDS: %s", pName))
 	
 	// Refresh Registry
 	go ReloadManagedDatabases()
@@ -618,7 +617,7 @@ func ResetOAuthCredentials(c *fiber.Ctx) error {
 
 	tx.Commit()
 
-	admin.LogAudit("RESET_OAUTH", id, ip, fmt.Sprintf("Reset OAuth credentials for product ID: %s", id))
+	logAudit("RESET_OAUTH", id, ip, fmt.Sprintf("Reset OAuth credentials for product ID: %s", id))
 	return c.JSON(fiber.Map{"success": true, "client_id": clientID, "client_secret": clientSecret})
 }
 
@@ -628,4 +627,17 @@ func GetPulseHealth(c *fiber.Ctx) error {
 		"success": true,
 		"pulse":   GetPulseStatus(),
 	})
+}
+
+func logAudit(action, target, ip, details string) {
+	if database.Router == nil || database.Router.GetGlobalManagerDB() == nil {
+		return
+	}
+	_, err := database.Router.GetGlobalManagerDB().Exec(
+		"INSERT INTO admin_audit_logs (action, target, ip, details, timestamp) VALUES (?, ?, ?, ?, ?)",
+		action, target, ip, details, time.Now().Unix(),
+	)
+	if err != nil {
+		log.Printf("Failed to log audit: %v", err)
+	}
 }

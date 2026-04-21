@@ -9,7 +9,7 @@ import (
 	"github.com/bandhannova/api-hunter/internal/database"
 	"github.com/bandhannova/api-hunter/internal/modules/admin"
 	"github.com/bandhannova/api-hunter/internal/modules/ai"
-	"github.com/bandhannova/api-hunter/internal/modules/database_mgmt"
+	"github.com/bandhannova/api-hunter/internal/database_mgmt"
 	"github.com/bandhannova/api-hunter/internal/modules/email"
 	"github.com/bandhannova/api-hunter/internal/modules/market"
 	"github.com/bandhannova/api-hunter/internal/modules/search"

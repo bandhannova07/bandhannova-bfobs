@@ -39,8 +39,9 @@ func ListAllDatabases(c *fiber.Ctx) error {
 func ProvisionDatabase(c *fiber.Ctx) error {
 	ip, _ := c.Locals("admin_ip").(string)
 	var req struct {
-		Name     string `json:"name"`
-		Category string `json:"category"`
+		Name      string `json:"name"`
+		Category  string `json:"category"`
+		ProductID string `json:"product_id"`
 	}
 
 	if err := c.BodyParser(&req); err != nil {

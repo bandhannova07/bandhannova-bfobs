@@ -10,7 +10,7 @@ import (
 	"github.com/bandhannova/api-hunter/internal/modules/api_proxy"
 	"github.com/bandhannova/api-hunter/internal/modules/auth"
 	"github.com/bandhannova/api-hunter/internal/modules/auth_provider"
-	"github.com/bandhannova/api-hunter/internal/modules/database_mgmt"
+	"github.com/bandhannova/api-hunter/internal/database_mgmt"
 	"github.com/bandhannova/api-hunter/internal/modules/email"
 	"github.com/bandhannova/api-hunter/internal/modules/market"
 	"github.com/bandhannova/api-hunter/internal/modules/search"

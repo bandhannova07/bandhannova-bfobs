@@ -213,7 +213,14 @@ func fallbackToInternalRegistry() {
 	if len(AppConfig.TursoUserShardTokens) == 0 {
 		AppConfig.TursoUserShardTokens = decryptInternal(InternalRegistry["TURSO_USER_SHARD_TOKENS"], master)
 	}
-	*/
+	if AppConfig.TursoOrg == "" {
+		decrypted := decryptInternal(InternalRegistry["TURSO_ORG"], master)
+		if len(decrypted) > 0 { AppConfig.TursoOrg = decrypted[0] }
+	}
+	if AppConfig.TursoAPIToken == "" {
+		decrypted := decryptInternal(InternalRegistry["TURSO_API_TOKEN"], master)
+		if len(decrypted) > 0 { AppConfig.TursoAPIToken = decrypted[0] }
+	}
 }
 
 func decryptInternal(encrypted, master string) []string {

@@ -16,6 +16,7 @@ import (
 	"github.com/bandhannova/api-hunter/internal/modules/search"
 	"github.com/bandhannova/api-hunter/internal/modules/system"
 	"github.com/bandhannova/api-hunter/internal/modules/user"
+	"github.com/bandhannova/api-hunter/internal/storage_mgmt"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -26,6 +27,9 @@ func SetupRoutes(app *fiber.App) {
 	app.Post("/db/p/:product_slug/execute", database_mgmt.DatabaseProxyHandler)
 
 	v1 := app.Group("/v1", middleware.RedisRateLimiter(60, time.Minute))
+
+	// Cloud Storage (Hugging Face)
+	v1.Post("/storage/upload", middleware.AuthRequired(), storage_mgmt.UploadToHuggingFace)
 
 	// OAuth 2.0 / BandhanNova ID Routes
 	oauth := v1.Group("/oauth")

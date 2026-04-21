@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import styles from "./page.module.css";
 import { fetchAPI } from "../../lib/api";
-import { PROVIDERS } from "../../lib/constants";
 
 export default function OverviewPage() {
   const [data, setData] = useState(null);
@@ -22,112 +21,111 @@ export default function OverviewPage() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 5000);
+    const interval = setInterval(loadData, 8000);
     return () => clearInterval(interval);
   }, []);
 
   if (loading && !data) {
-    return <div style={{ padding: "20px" }}>Loading subsystem status...</div>;
+    return (
+      <div className={styles.loadingState}>
+        <div className={styles.loadingPulse}></div>
+        <span>Initializing Command Center...</span>
+      </div>
+    );
   }
 
-  if (!data) {
-    return <div style={{ padding: "20px", color: "var(--neon-red)" }}>Failed to connect to data source.</div>;
+  if (!data || !data.stats) {
+    return <div className={styles.errorState}>⚠ Failed to connect to data source.</div>;
   }
 
-  const timeline = data.timeline || { success: 0, failed: 0 };
-  const keys = data.keys || [];
+  const s = data.stats;
+  const logs = data.recent_logs || [];
+  const providers = data.providers || [];
   const shards = data.shards || [];
-  const logs = data.logs || [];
-
-  const totalReq = timeline.success + timeline.failed;
-  const successRate = totalReq > 0 ? Math.round((timeline.success / totalReq) * 100) : 0;
-  const healthyKeys = keys.filter(k => k.status === "Healthy" || k.Status === "Healthy").length;
-
-  let avgLat = 0;
-  if (logs.length > 0) {
-    avgLat = logs.reduce((acc, log) => acc + (log.Latency / 1000000), 0) / logs.length;
-  }
-
-  // Group by provider for brief stats
-  const providerStats = {};
-  keys.forEach(k => {
-    const p = k.Provider || k.provider || "Unknown";
-    if (!providerStats[p]) {
-      providerStats[p] = { healthy: 0, total: 0, successCount: 0 };
-    }
-    providerStats[p].total++;
-    if (k.Status === "Healthy" || k.status === "healthy" || k.Status === "active" || k.status === "active") providerStats[p].healthy++;
-    providerStats[p].successCount += (k.SuccessCount || 0);
-  });
+  const successRate = s.total_requests > 0 ? Math.round((s.success_count / s.total_requests) * 100) : 0;
 
   return (
-    <div>
+    <div className={styles.page}>
+      {/* ─── Top Stat Cards ─────────────────────────── */}
       <div className={styles.grid}>
-        <div className={`glass-panel ${styles.statCard}`}>
-          <div className={styles.statGlow} style={{ background: "var(--neon-blue)" }}></div>
-          <div className={styles.statLabel}>Total Requests</div>
-          <div className={styles.statValue} style={{ color: "var(--neon-blue)" }}>{totalReq.toLocaleString()}</div>
-          <div className={styles.statSub}>{timeline.success} OK / {timeline.failed} ERR</div>
-        </div>
-
-        <div className={`glass-panel ${styles.statCard}`}>
-          <div className={styles.statGlow} style={{ background: "var(--neon-green)" }}></div>
-          <div className={styles.statLabel}>Success Rate</div>
-          <div className={styles.statValue} style={{ color: "var(--neon-green)" }}>{successRate}%</div>
-          <div className={styles.statSub}>Overall Uptime</div>
-        </div>
-
-        <div className={`glass-panel ${styles.statCard}`}>
-          <div className={styles.statGlow} style={{ background: "var(--neon-purple)" }}></div>
-          <div className={styles.statLabel}>Active Keys</div>
-          <div className={styles.statValue} style={{ color: "var(--neon-purple)" }}>{healthyKeys}</div>
-          <div className={styles.statSub}>of {keys.length} total keys</div>
-        </div>
-
-        <div className={`glass-panel ${styles.statCard}`}>
-          <div className={styles.statGlow} style={{ background: "var(--neon-amber)" }}></div>
-          <div className={styles.statLabel}>Avg Latency</div>
-          <div className={styles.statValue} style={{ color: "var(--neon-amber)" }}>{avgLat.toFixed(0)} ms</div>
-          <div className={styles.statSub}>Last 100 requests</div>
-        </div>
-
-        <div className={`glass-panel ${styles.statCard}`}>
-          <div className={styles.statGlow} style={{ background: "var(--neon-red)" }}></div>
-          <div className={styles.statLabel}>Database Health</div>
-          <div className={styles.statValue} style={{ color: "var(--neon-red)" }}>
-            {shards.filter(s => s.status === "Healthy" || s.Status === "Healthy").length} / {shards.length}
-          </div>
-          <div className={styles.statSub}>Shards Online</div>
-        </div>
+        <StatCard
+          label="Total Requests"
+          value={s.total_requests.toLocaleString()}
+          sub={`${s.success_count} OK / ${s.failed_count} ERR`}
+          color="var(--neon-blue)"
+          icon="📡"
+        />
+        <StatCard
+          label="Success Rate"
+          value={`${successRate}%`}
+          sub="Overall Uptime"
+          color="var(--neon-green)"
+          icon="✓"
+        />
+        <StatCard
+          label="Active Keys"
+          value={s.active_keys}
+          sub={`of ${s.total_keys} total keys`}
+          color="var(--neon-purple)"
+          icon="🔑"
+        />
+        <StatCard
+          label="Avg Latency"
+          value={`${Math.round(s.avg_latency_ms)} ms`}
+          sub="Last 100 requests"
+          color="var(--neon-amber)"
+          icon="⚡"
+        />
+        <StatCard
+          label="Shards Online"
+          value={`${shards.filter(sh => sh.status === "Healthy").length} / ${shards.length}`}
+          sub="Database Health"
+          color="#06d6a0"
+          icon="🗄️"
+        />
       </div>
 
+      {/* ─── Provider Health ──────────────────────────── */}
       <div className={styles.sectionHeader}>
-        Provider Health
+        <span>⚙ Provider Health</span>
+        <span className={styles.sectionBadge}>{providers.length} active</span>
       </div>
 
       <div className={styles.providerGrid}>
-        {Object.keys(providerStats).map(p => {
-          const meta = PROVIDERS[p] || { icon: "⚙️", color: "#666" };
-          const stats = providerStats[p];
-          return (
-            <div key={p} className={`glass-panel ${styles.providerCard}`}>
-              <div className={styles.providerIcon} style={{ color: meta.color }}>
-                {meta.icon}
-              </div>
-              <div className={styles.providerInfo}>
-                <div className={styles.providerName}>{p}</div>
-                <div className={styles.providerStats}>
-                  <span>{stats.healthy}/{stats.total} Healthy</span>
-                  <span>{stats.successCount.toLocaleString()} Calls</span>
-                </div>
+        {providers.map((p, i) => (
+          <div key={i} className={`glass-panel ${styles.providerCard}`}>
+            <div className={styles.providerIcon}>{p.icon || "🔌"}</div>
+            <div className={styles.providerInfo}>
+              <div className={styles.providerName}>{p.name}</div>
+              <div className={styles.providerStats}>
+                <span>{p.keys} key{p.keys !== 1 ? "s" : ""}</span>
+                <span className={styles.dot}>·</span>
+                <span>{p.requests.toLocaleString()} req</span>
+                <span className={styles.dot}>·</span>
+                <span style={{ color: "var(--neon-green)" }}>
+                  {p.requests > 0 ? Math.round((p.success / p.requests) * 100) : 0}% ok
+                </span>
               </div>
             </div>
-          );
-        })}
+            <div className={styles.providerBar}>
+              <div
+                className={styles.providerBarFill}
+                style={{ width: `${p.requests > 0 ? Math.round((p.success / p.requests) * 100) : 0}%` }}
+              />
+            </div>
+          </div>
+        ))}
+        {providers.length === 0 && (
+          <div className={`glass-panel ${styles.emptyCard}`}>
+            No provider activity yet. Add API keys to get started.
+          </div>
+        )}
       </div>
 
+      {/* ─── Live Activity Feed ──────────────────────── */}
       <div className={styles.sectionHeader}>
-        Live Activity Feed
+        <span>📡 Live Activity Feed</span>
+        <span className={styles.sectionBadge}>{logs.length} recent</span>
       </div>
 
       <div className={styles.liveFeed}>
@@ -137,35 +135,31 @@ export default function OverviewPage() {
               <tr>
                 <th>Time</th>
                 <th>Method</th>
-                <th>Endpoint</th>
+                <th>Provider</th>
                 <th>Status</th>
                 <th>Latency</th>
-                <th>Key Used</th>
               </tr>
             </thead>
             <tbody>
-              {[...logs].reverse().slice(0, 15).map((log, i) => (
+              {logs.map((log, i) => (
                 <tr key={i}>
-                  <td style={{ color: "var(--text-secondary)" }}>
-                    {new Date(log.Timestamp).toLocaleTimeString()}
+                  <td className={styles.cellMuted}>
+                    {new Date(log.timestamp * 1000).toLocaleTimeString()}
                   </td>
-                  <td style={{ color: "var(--neon-blue)", fontWeight: 600 }}>{log.Method}</td>
-                  <td style={{ fontFamily: "monospace", fontSize: "12px" }}>{log.Path}</td>
+                  <td className={styles.cellMethod}>{log.method}</td>
+                  <td className={styles.cellProvider}>{log.card_name || "—"}</td>
                   <td>
-                    <span className={`${styles.statusPill} ${log.StatusCode < 400 ? styles.ok : styles.fail}`}>
-                      {log.StatusCode}
+                    <span className={`${styles.statusPill} ${log.status < 400 ? styles.ok : styles.fail}`}>
+                      {log.status}
                     </span>
                   </td>
-                  <td style={{ color: "var(--text-secondary)" }}>{(log.Latency / 1000000).toFixed(1)}ms</td>
-                  <td style={{ fontFamily: "monospace", fontSize: "11px", color: "var(--text-secondary)" }}>
-                    {log.KeyUsed || "-"}
-                  </td>
+                  <td className={styles.cellMuted}>{log.latency}ms</td>
                 </tr>
               ))}
               {logs.length === 0 && (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: "center", padding: "24px", color: "var(--text-secondary)" }}>
-                    No recent activity
+                  <td colSpan="5" className={styles.emptyRow}>
+                    No recent activity — waiting for first request
                   </td>
                 </tr>
               )}
@@ -173,6 +167,39 @@ export default function OverviewPage() {
           </table>
         </div>
       </div>
+
+      {/* ─── Shard Health ─────────────────────────────── */}
+      <div className={styles.sectionHeader} style={{ marginTop: 32 }}>
+        <span>🗄️ Shard Health</span>
+      </div>
+      <div className={styles.shardGrid}>
+        {shards.map((sh, i) => (
+          <div key={i} className={`glass-panel ${styles.shardCard}`}>
+            <div className={styles.shardDot} data-status={sh.status === "Healthy" ? "ok" : "err"} />
+            <div>
+              <div className={styles.shardName}>{sh.name}</div>
+              <div className={styles.shardType}>{sh.type}</div>
+            </div>
+            <div className={styles.shardStatus}>
+              <span className={`badge ${sh.status === "Healthy" ? "badge-healthy" : sh.status === "Disconnected" ? "badge-dead" : "badge-warning"}`}>
+                {sh.status}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, color, icon }) {
+  return (
+    <div className={`glass-panel ${styles.statCard}`}>
+      <div className={styles.statGlow} style={{ background: color }}></div>
+      <div className={styles.statIcon} style={{ color }}>{icon}</div>
+      <div className={styles.statLabel}>{label}</div>
+      <div className={styles.statValue} style={{ color }}>{value}</div>
+      <div className={styles.statSub}>{sub}</div>
     </div>
   );
 }

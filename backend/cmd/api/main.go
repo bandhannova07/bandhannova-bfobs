@@ -86,6 +86,7 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName:           "BandhanNova BFOBS v2.1",
 		EnablePrintRoutes: false,
+		BodyLimit:         500 * 1024 * 1024,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
 			if e, ok := err.(*fiber.Error); ok {

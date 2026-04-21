@@ -39,6 +39,8 @@ type Config struct {
 	PublicURL            string
 	TursoOrg             string
 	TursoAPIToken        string
+	HFToken              string
+	HFStorageRepo        string
 }
 
 var AppConfig Config
@@ -79,6 +81,8 @@ func LoadConfig() {
 		PublicURL:            getEnv("PUBLIC_URL", ""),
 		TursoOrg:             getEnv("TURSO_ORG", ""),
 		TursoAPIToken:        getEnv("TURSO_API_TOKEN", ""),
+		HFToken:              getEnv("HF_TOKEN", ""),
+		HFStorageRepo:        getEnv("HF_STORAGE_REPO", ""),
 	}
 
 	// Fallback to internal registry if keys are missing but master key exists

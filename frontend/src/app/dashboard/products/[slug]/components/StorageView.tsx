@@ -37,13 +37,13 @@ export default function StorageView({ product }: StorageViewProps) {
   const [activeBucket, setActiveBucket] = useState<Bucket | null>(null);
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
-  
+
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<Bucket | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [masterKey, setMasterKey] = useState("");
-  
+
   // New Bucket Form
   const [newBucket, setNewBucket] = useState({ name: "", description: "", is_public: false });
 
@@ -76,7 +76,7 @@ export default function StorageView({ product }: StorageViewProps) {
       const token = sessionStorage.getItem("admin_token");
       const res = await fetch(`${API_URL}/storage/p/${product.slug}/buckets`, {
         method: "POST",
-        headers: { 
+        headers: {
           "X-Admin-Token": token || "",
           "Content-Type": "application/json"
         },
@@ -88,7 +88,7 @@ export default function StorageView({ product }: StorageViewProps) {
         setNewBucket({ name: "", description: "", is_public: false });
         fetchBuckets();
       } else {
-        alert(data.message);
+        alert(data.message + (data.details ? ": " + data.details : ""));
       }
     } catch (err) {
       alert("Failed to create bucket");
@@ -107,7 +107,7 @@ export default function StorageView({ product }: StorageViewProps) {
       const token = sessionStorage.getItem("admin_token");
       const res = await fetch(`${API_URL}/storage/buckets/${showDeleteModal.id}?confirm=${encodeURIComponent(confirmText)}`, {
         method: "DELETE",
-        headers: { 
+        headers: {
           "X-Admin-Token": token || "",
           "X-BandhanNova-Master-Key": masterKey
         }
@@ -163,7 +163,7 @@ export default function StorageView({ product }: StorageViewProps) {
         headers: { "X-Admin-Token": token || "" },
         body: formData
       });
-      
+
       const data = await res.json();
       if (data.success) {
         setUploadStatus("✅ Upload Successful!");
@@ -233,20 +233,20 @@ export default function StorageView({ product }: StorageViewProps) {
               <h3>📂 {activeBucket.name} <small style={{ opacity: 0.5, fontSize: "12px" }}>/{activeBucket.slug}</small></h3>
               <button className="btn btn-secondary" onClick={() => setActiveBucket(null)}>Close</button>
             </div>
-            
+
             <div className={styles.explorerContent} style={{ padding: "32px", background: "rgba(255,255,255,0.01)" }}>
               <form onSubmit={handleUpload} className={styles.uploadForm} style={{ flexDirection: "row", alignItems: "center" }}>
-                <input 
-                  type="file" 
-                  id="file-explorer-upload" 
-                  className={styles.hiddenInput} 
+                <input
+                  type="file"
+                  id="file-explorer-upload"
+                  className={styles.hiddenInput}
                   onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)}
                 />
                 <label htmlFor="file-explorer-upload" className={styles.dropZone} style={{ height: "60px", flex: 1, marginBottom: 0 }}>
                   {selectedFile ? selectedFile.name : "Select File to Push"}
                 </label>
                 <button type="submit" className="btn btn-primary" disabled={uploading || !selectedFile} style={{ height: "60px", padding: "0 40px" }}>
-                   {uploading ? "..." : "Push File"}
+                  {uploading ? "..." : "Push File"}
                 </button>
               </form>
               {uploadStatus && <div className={styles.statusMsg}>{uploadStatus}</div>}
@@ -280,20 +280,20 @@ export default function StorageView({ product }: StorageViewProps) {
             <p>Define a new logical storage container.</p>
             <div className={styles.field}>
               <label>Bucket Name</label>
-              <input 
-                className={styles.confirmInput} 
-                placeholder="e.g. User Avatars" 
+              <input
+                className={styles.confirmInput}
+                placeholder="e.g. User Avatars"
                 value={newBucket.name}
-                onChange={e => setNewBucket({...newBucket, name: e.target.value})}
+                onChange={e => setNewBucket({ ...newBucket, name: e.target.value })}
               />
             </div>
             <div className={styles.field}>
               <label>Description</label>
-              <input 
-                className={styles.confirmInput} 
-                placeholder="What is this bucket for?" 
+              <input
+                className={styles.confirmInput}
+                placeholder="What is this bucket for?"
                 value={newBucket.description}
-                onChange={e => setNewBucket({...newBucket, description: e.target.value})}
+                onChange={e => setNewBucket({ ...newBucket, description: e.target.value })}
               />
             </div>
             <div className={styles.modalActions}>
@@ -310,13 +310,13 @@ export default function StorageView({ product }: StorageViewProps) {
           <div className={styles.modalContent}>
             <h3 style={{ color: "var(--neon-red)" }}>Decommission Bucket</h3>
             <p>This action is permanent. All files in <strong>{showDeleteModal.name}</strong> will remain on HF but the bucket record will be removed.</p>
-            
+
             <div className={styles.field}>
               <label>Master Key</label>
-              <input 
+              <input
                 type="password"
-                className={styles.confirmInput} 
-                placeholder="Enter BandhanNova Master Key" 
+                className={styles.confirmInput}
+                placeholder="Enter BandhanNova Master Key"
                 value={masterKey}
                 onChange={e => setMasterKey(e.target.value)}
               />
@@ -325,9 +325,9 @@ export default function StorageView({ product }: StorageViewProps) {
             <div className={styles.field}>
               <label>Confirmation Phrase</label>
               <p style={{ fontSize: "11px", marginBottom: "8px" }}>Type: <code>I am Bandhan, I want to delete this bucket named {showDeleteModal.name}.</code></p>
-              <input 
-                className={styles.confirmInput} 
-                placeholder="Type the phrase exactly" 
+              <input
+                className={styles.confirmInput}
+                placeholder="Type the phrase exactly"
                 value={confirmText}
                 onChange={e => setConfirmText(e.target.value)}
               />

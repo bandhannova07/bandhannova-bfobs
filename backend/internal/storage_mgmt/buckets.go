@@ -97,7 +97,11 @@ func CreateBucket(c *fiber.Ctx) error {
 		id, productID, req.Name, slug, req.Description, isPublicInt, now,
 	)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create bucket in DB"})
+		return c.Status(500).JSON(fiber.Map{
+			"error": true, 
+			"message": "Failed to create bucket in DB",
+			"details": err.Error(),
+		})
 	}
 
 	// 3. Initialize on Hugging Face (Create .keep file)

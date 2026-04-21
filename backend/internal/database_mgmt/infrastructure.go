@@ -134,6 +134,122 @@ func UpdateInfrastructureShard(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "message": "Infrastructure shard updated"})
 }
 
+// QueryInfrastructureShard runs a SQL query on a specific shard from the fleet
+func QueryInfrastructureShard(c *fiber.Ctx) error {
+	id := c.Params("id")
+	var req struct {
+		Query string `json:"query"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid query"})
+	}
+
+	// Find the shard in registry to get URL/Token
+	var shard struct {
+		URL   string `db:"db_url"`
+		Token string `db:"encrypted_token"`
+	}
+	err := database.Router.GetCoreMasterDB().QueryRow(
+		"SELECT db_url, encrypted_token FROM infrastructure_shards WHERE id = ?", id,
+	).Scan(&shard.URL, &shard.Token)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Shard not found"})
+	}
+
+	decryptedToken, err := security.Decrypt(shard.Token, config.AppConfig.BandhanNovaMasterKey)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to decrypt shard token"})
+	}
+
+	db, err := database.ConnectTurso(shard.URL, decryptedToken)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to connect to shard: " + err.Error()})
+	}
+	defer db.Close()
+
+	rows, err := db.Query(req.Query)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Query failed: " + err.Error()})
+	}
+	defer rows.Close()
+
+	cols, _ := rows.Columns()
+	var result []map[string]interface{}
+	for rows.Next() {
+		columns := make([]interface{}, len(cols))
+		columnPointers := make([]interface{}, len(cols))
+		for i := range columns {
+			columnPointers[i] = &columns[i]
+		}
+		rows.Scan(columnPointers...)
+		
+		rowMap := make(map[string]interface{})
+		for i, colName := range cols {
+			val := columns[i]
+			if b, ok := val.([]byte); ok {
+				rowMap[colName] = string(b)
+			} else {
+				rowMap[colName] = val
+			}
+		}
+		result = append(result, rowMap)
+	}
+
+	return c.JSON(fiber.Map{"success": true, "data": result, "columns": cols})
+}
+
+// ClearInfrastructureShard wipes all tables in a shard for a fresh start
+func ClearInfrastructureShard(c *fiber.Ctx) error {
+	id := c.Params("id")
+	// Safety check: Cannot clear Core Master via this API
+	
+	var shard struct {
+		URL   string `db:"db_url"`
+		Token string `db:"encrypted_token"`
+		Type  string `db:"type"`
+	}
+	err := database.Router.GetCoreMasterDB().QueryRow(
+		"SELECT db_url, encrypted_token, type FROM infrastructure_shards WHERE id = ?", id,
+	).Scan(&shard.URL, &shard.Token, &shard.Type)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Shard not found"})
+	}
+
+	decryptedToken, err := security.Decrypt(shard.Token, config.AppConfig.BandhanNovaMasterKey)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Security failure"})
+	}
+
+	db, err := database.ConnectTurso(shard.URL, decryptedToken)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Connection failure"})
+	}
+	defer db.Close()
+
+	// Drop all tables
+	rows, _ := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+	for rows.Next() {
+		var name string
+		rows.Scan(&name)
+		db.Exec("DROP TABLE IF EXISTS " + name)
+	}
+	rows.Close()
+
+	// Re-run migrations based on type
+	switch shard.Type {
+	case "global_manager":
+		database.InitGlobalManagerSchema(db)
+	case "auth":
+		database.InitAuthSchema(db)
+	case "analytics":
+		database.InitAnalyticsSchema(db)
+	case "user":
+		database.InitUserSchema(db)
+	}
+
+	return c.JSON(fiber.Map{"success": true, "message": "Shard successfully cleared and re-initialized"})
+}
+
 // RemoveInfrastructureShard deletes a master shard from Core Master
 func RemoveInfrastructureShard(c *fiber.Ctx) error {
 	id := c.Params("id")

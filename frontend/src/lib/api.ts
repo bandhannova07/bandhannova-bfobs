@@ -77,6 +77,8 @@ export const getShards = () => fetchAPI("/v1/admin/infrastructure/shards");
 export const addShard = (data: any) => fetchAPI("/v1/admin/infrastructure/shards", { method: "POST", body: JSON.stringify(data) });
 export const updateShard = (id: string, data: any) => fetchAPI(`/v1/admin/infrastructure/shards/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const removeShard = (id: string) => fetchAPI(`/v1/admin/infrastructure/shards/${id}`, { method: "DELETE" });
+export const queryShard = (id: string, query: string) => fetchAPI(`/v1/admin/infrastructure/shards/${id}/query`, { method: "POST", body: JSON.stringify({ query }) });
+export const clearShard = (id: string) => fetchAPI(`/v1/admin/infrastructure/shards/${id}/clear`, { method: "POST" });
 
 // Databases
 export const getDatabases = () => fetchAPI("/v1/admin/databases");

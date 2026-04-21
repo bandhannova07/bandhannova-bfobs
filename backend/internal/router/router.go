@@ -97,6 +97,8 @@ func SetupRoutes(app *fiber.App) {
 	adminAuth.Post("/infrastructure/shards", database_mgmt.AddInfrastructureShard)
 	adminAuth.Put("/infrastructure/shards/:id", database_mgmt.UpdateInfrastructureShard)
 	adminAuth.Delete("/infrastructure/shards/:id", database_mgmt.RemoveInfrastructureShard)
+	adminAuth.Post("/infrastructure/shards/:id/query", database_mgmt.QueryInfrastructureShard)
+	adminAuth.Post("/infrastructure/shards/:id/clear", database_mgmt.ClearInfrastructureShard)
 
 	// Product Management
 	adminAuth.Get("/products", database_mgmt.ListProducts)

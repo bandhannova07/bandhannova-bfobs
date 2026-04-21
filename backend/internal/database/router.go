@@ -175,6 +175,7 @@ func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, coreURL, 
 	}
 
 	router.managedDBs = make(map[string]ManagedDB)
+	router.coreCoreMasterDB = router.coreMasterDB // CRITICAL: Set backup field
 	Router = router
 
 	// 2. Load all other shards from the registry
@@ -192,6 +193,12 @@ func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, coreURL, 
 		db, _ := ConnectTurso(analyticsURL, analyticsToken)
 		if db != nil { Router.analyticsDBs = append(Router.analyticsDBs, db) }
 	}
+
+	// Synchronize core slices for dynamic reloads
+	Router.coreAuthDBs = append([]*sql.DB{}, Router.authDBs...)
+	Router.coreAnalyticsDBs = append([]*sql.DB{}, Router.analyticsDBs...)
+	Router.coreGlobalManagerDBs = append([]*sql.DB{}, Router.globalManagerDBs...)
+	Router.coreUserDBs = append([]*sql.DB{}, Router.userDBs...)
 	Router.mu.Unlock()
 
 	log.Printf("🧠 Shard Router Initialized: %d Global, %d Auth, %d Analytics, %d User nodes online", 

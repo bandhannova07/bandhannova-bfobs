@@ -13,10 +13,31 @@ interface Shard {
   created_at: number;
 }
 
+const getTypeIcon = (type: string) => {
+  switch (type) {
+    case "global_manager": return "🌐";
+    case "auth": return "🔐";
+    case "analytics": return "📈";
+    case "user": return "👥";
+    default: return "💾";
+  }
+};
+
+const getTypeColor = (type: string) => {
+  switch (type) {
+    case "global_manager": return "#00c6ff";
+    case "auth": return "#f39c12";
+    case "analytics": return "#9b59b6";
+    case "user": return "#2ecc71";
+    default: return "#fff";
+  }
+};
+
 export default function InfrastructurePage() {
   const [shards, setShards] = useState<Shard[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     type: "global_manager",
@@ -43,6 +64,7 @@ export default function InfrastructurePage() {
 
   const handleAddShard = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       const res = await addShard(formData);
       if (res.success) {
@@ -51,12 +73,14 @@ export default function InfrastructurePage() {
         loadShards();
       }
     } catch (error) {
-      alert("Failed to add shard");
+      alert("Failed to register shard. Verify credentials.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDeleteShard = async (id: string) => {
-    if (!confirm("Are you sure you want to remove this infrastructure shard? This will disconnect it from the gateway.")) return;
+    if (!confirm("Are you sure you want to decommission this shard? It will be disconnected from the fleet brain.")) return;
     try {
       const res = await removeShard(id);
       if (res.success) {
@@ -69,22 +93,51 @@ export default function InfrastructurePage() {
 
   return (
     <div className={styles.container}>
-      <header className={styles.header}>
-        <h2 className={styles.title}>Infrastructure Shards</h2>
+      <div className={styles.heroSection}>
+        <div className={styles.heroContent}>
+          <h2 className={styles.title}>Infrastructure Fleet</h2>
+          <p className={styles.subtitle}>Manage the master shards orchestrating the BandhanNova ecosystem.</p>
+        </div>
         <button onClick={() => setIsModalOpen(true)} className={styles.addBtn}>
-          + Register Shard
+          <span className={styles.plusIcon}>+</span> Register Master Shard
         </button>
-      </header>
+      </div>
 
       {isLoading ? (
-        <p>Loading infrastructure...</p>
+        <div className={styles.loadingContainer}>
+          <div className={styles.spinner}></div>
+          <p>Scanning Infrastructure Fleet...</p>
+        </div>
       ) : (
         <div className={styles.grid}>
+          {/* Core Master Card (Virtual representation of the env-based one) */}
+          <div className={`${styles.card} ${styles.coreCard}`}>
+            <div className={styles.cardGlow}></div>
+            <div className={styles.cardHeader}>
+              <div className={styles.typeIcon}>🧠</div>
+              <div className={styles.headerInfo}>
+                <span className={styles.shardName}>Core Master</span>
+                <span className={styles.shardTypeLabel}>SYSTEM BRAIN</span>
+              </div>
+            </div>
+            <div className={styles.shardURL}>[MANAGED VIA HF SECRETS]</div>
+            <div className={styles.cardFooter}>
+              <div className={styles.status}>
+                <div className={`${styles.statusDot} ${styles.pulse}`}></div>
+                Operational
+              </div>
+              <div className={styles.readOnlyTag}>IMMUTABLE</div>
+            </div>
+          </div>
+
           {shards.map((shard) => (
-            <div key={shard.id} className={styles.card}>
+            <div key={shard.id} className={styles.card} style={{'--accent-color': getTypeColor(shard.type)} as any}>
               <div className={styles.cardHeader}>
-                <span className={styles.shardName}>{shard.name || "Unnamed Shard"}</span>
-                <span className={styles.shardType}>{shard.type}</span>
+                <div className={styles.typeIcon}>{getTypeIcon(shard.type)}</div>
+                <div className={styles.headerInfo}>
+                  <span className={styles.shardName}>{shard.name}</span>
+                  <span className={styles.shardTypeLabel} style={{color: getTypeColor(shard.type)}}>{shard.type.replace('_', ' ')}</span>
+                </div>
               </div>
               <div className={styles.shardURL}>{shard.db_url}</div>
               <div className={styles.cardFooter}>
@@ -95,6 +148,7 @@ export default function InfrastructurePage() {
                 <button 
                   onClick={() => handleDeleteShard(shard.id)} 
                   className={styles.removeBtn}
+                  title="Decommission Shard"
                 >
                   Decommission
                 </button>
@@ -102,8 +156,12 @@ export default function InfrastructurePage() {
             </div>
           ))}
 
-          {shards.length === 0 && (
-            <p className={styles.emptyState}>No additional shards registered in Core Master.</p>
+          {shards.length === 0 && !isLoading && (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyIcon}>📡</div>
+              <p>No additional shards registered in Core Master.</p>
+              <span>Add Global Managers or Specialized Shards to expand the fleet.</span>
+            </div>
           )}
         </div>
       )}
@@ -111,35 +169,40 @@ export default function InfrastructurePage() {
       {isModalOpen && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal}>
-            <h3 className={styles.modalTitle}>Register New Master Shard</h3>
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>Register New Shard</h3>
+              <p>Expand your infrastructure capacity dynamically.</p>
+            </div>
             <form onSubmit={handleAddShard}>
-              <div className={styles.formGroup}>
-                <label>Display Name</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. Global Manager 2" 
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  required
-                />
-              </div>
-              <div className={styles.formGroup}>
-                <label>Shard Type</label>
-                <select 
-                  value={formData.type}
-                  onChange={(e) => setFormData({...formData, type: e.target.value})}
-                >
-                  <option value="global_manager">Global Manager</option>
-                  <option value="auth">Auth Shard</option>
-                  <option value="analytics">Analytics Shard</option>
-                  <option value="user">User Shard</option>
-                </select>
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label>Display Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Global Manager 2" 
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Shard Type</label>
+                  <select 
+                    value={formData.type}
+                    onChange={(e) => setFormData({...formData, type: e.target.value})}
+                  >
+                    <option value="global_manager">Global Manager</option>
+                    <option value="auth">Auth Shard</option>
+                    <option value="analytics">Analytics Shard</option>
+                    <option value="user">User Shard</option>
+                  </select>
+                </div>
               </div>
               <div className={styles.formGroup}>
                 <label>Turso DB URL</label>
                 <input 
                   type="text" 
-                  placeholder="libsql://..." 
+                  placeholder="libsql://your-shard.turso.io" 
                   value={formData.db_url}
                   onChange={(e) => setFormData({...formData, db_url: e.target.value})}
                   required
@@ -149,15 +212,17 @@ export default function InfrastructurePage() {
                 <label>Turso Auth Token</label>
                 <input 
                   type="password" 
-                  placeholder="eyJhbG..." 
+                  placeholder="Paste secure token here" 
                   value={formData.token}
                   onChange={(e) => setFormData({...formData, token: e.target.value})}
                   required
                 />
               </div>
               <div className={styles.modalActions}>
-                <button type="button" onClick={() => setIsModalOpen(false)} className={styles.cancelBtn}>Cancel</button>
-                <button type="submit" className={styles.submitBtn}>Register Shard</button>
+                <button type="button" onClick={() => setIsModalOpen(false)} className={styles.cancelBtn}>Discard</button>
+                <button type="submit" className={styles.submitBtn} disabled={isSubmitting}>
+                  {isSubmitting ? "Syncing..." : "Connect Shard"}
+                </button>
               </div>
             </form>
           </div>

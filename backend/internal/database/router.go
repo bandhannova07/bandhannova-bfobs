@@ -173,6 +173,38 @@ func InitShardRouter(authURL, authToken, analyticsURL, analyticsToken, coreURL, 
 	return nil
 }
 
+// RegisterShardDynamically adds a new master shard to the active fleet in real-time
+func (sr *ShardRouter) RegisterShardDynamically(sType, dbURL, token string) error {
+	db, err := ConnectTurso(dbURL, token)
+	if err != nil {
+		return fmt.Errorf("failed to connect to new shard: %w", err)
+	}
+
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+
+	switch sType {
+	case "global_manager":
+		sr.globalManagerDBs = append(sr.globalManagerDBs, db)
+		sr.coreGlobalManagerDBs = append(sr.coreGlobalManagerDBs, db)
+	case "auth":
+		sr.authDB = db
+		sr.coreAuthDB = db
+	case "analytics":
+		sr.analyticsDB = db
+		sr.coreAnalyticsDB = db
+	case "user":
+		sr.userDBs = append(sr.userDBs, db)
+		sr.coreUserDBs = append(sr.coreUserDBs, db)
+	default:
+		db.Close()
+		return fmt.Errorf("unknown shard type: %s", sType)
+	}
+
+	log.Printf("🔌 Real-time Shard Attached: [%s] %s", sType, dbURL)
+	return nil
+}
+
 func (sr *ShardRouter) GetAuthDB() *sql.DB             { return sr.authDB }
 func (sr *ShardRouter) GetAnalyticsDB() *sql.DB        { return sr.analyticsDB }
 func (sr *ShardRouter) GetCoreMasterDB() *sql.DB       { return sr.coreMasterDB }

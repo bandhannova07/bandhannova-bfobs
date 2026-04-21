@@ -15,6 +15,7 @@ import (
 	"github.com/bandhannova/api-hunter/internal/config"
 	"github.com/bandhannova/api-hunter/internal/database"
 	"github.com/bandhannova/api-hunter/internal/security"
+	"github.com/bandhannova/api-hunter/internal/storage_mgmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
@@ -549,8 +550,8 @@ func AddProduct(c *fiber.Ctx) error {
 	tx.Commit()
 
 	// Automatic storage is now handled via sub-folders in the master repository.
-	// No need to create new standalone datasets for each product.
-
+	go storage_mgmt.InitializeProductFolder(slug)
+	
 	logAudit("ADD_PRODUCT", req.Name, ip, fmt.Sprintf("Added product: %s (Client: %s)", req.Name, clientID))
 
 	return c.JSON(fiber.Map{"success": true, "message": "Product added with OAuth credentials", "id": id, "client_id": clientID, "client_secret": clientSecret})

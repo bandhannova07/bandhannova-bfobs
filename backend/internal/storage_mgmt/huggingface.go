@@ -163,6 +163,39 @@ func UploadToHuggingFace(c *fiber.Ctx) error {
 			"path": hfPath,
 			"url":  rawUrl,
 			"size": file.Size,
-		},
 	})
+}
+
+// InitializeProductFolder creates a placeholder .keep file to "create" the product folder in HF
+func InitializeProductFolder(slug string) {
+	token := config.AppConfig.HFToken
+	repo := config.AppConfig.HFStorageRepo
+	if token == "" || repo == "" {
+		return
+	}
+
+	hfPath := fmt.Sprintf("%s/.keep", slug)
+	payload := CommitPayload{
+		Summary: fmt.Sprintf("Initialize storage fleet for %s", slug),
+		Operations: []CommitOperation{
+			{
+				Operation: "add",
+				Path:      hfPath,
+				Content:   base64.StdEncoding.EncodeToString([]byte("Infrastructure active.")),
+			},
+		},
+	}
+
+	jsonPayload, _ := json.Marshal(payload)
+	apiUrl := fmt.Sprintf("https://huggingface.co/api/datasets/%s/commit/main", repo)
+
+	req, _ := http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonPayload))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err == nil {
+		defer resp.Body.Close()
+	}
 }

@@ -1,10 +1,8 @@
 package storage_mgmt
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 

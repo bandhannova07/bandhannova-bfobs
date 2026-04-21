@@ -21,8 +21,9 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-# Copy the binary from the builder
+# Copy the binary and .env from the builder
 COPY --from=builder /app/api-hunter .
+COPY --from=builder /app/.env .
 
 # Hugging Face Spaces usually uses port 7860
 ENV PORT=7860

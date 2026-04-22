@@ -209,33 +209,43 @@ func ListDatabases(c *fiber.Ctx) error {
 	}
 
 	// 2. Add Managed DBs (From all Global Shards)
-	for _, db := range database.Router.GetAllGlobalManagerDBs() {
-		query := "SELECT id, slug, name, category, db_url, product_id, status, created_at, updated_at FROM managed_databases"
-		var rows *sql.Rows
-		var err error
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 
-		if productID != "" {
-			rows, err = db.Query(query+" WHERE product_id = ? ORDER BY created_at DESC", productID)
-		} else {
-			rows, err = db.Query(query + " ORDER BY created_at DESC")
-		}
+	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+		wg.Add(1)
+		go func(db *sql.DB) {
+			defer wg.Done()
+			query := "SELECT id, slug, name, category, db_url, product_id, status, created_at, updated_at FROM managed_databases"
+			var rows *sql.Rows
+			var err error
 
-		if err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var d DatabaseResponse
-				var pID sql.NullString
-				if err := rows.Scan(&d.ID, &d.Slug, &d.Name, &d.Category, &d.URL, &pID, &d.Status, &d.CreatedAt, &d.UpdatedAt); err == nil {
-					d.IsCore = false
-					if pID.Valid {
-						d.ProductID = pID.String
+			if productID != "" {
+				rows, err = db.Query(query+" WHERE product_id = ? ORDER BY created_at DESC", productID)
+			} else {
+				rows, err = db.Query(query + " ORDER BY created_at DESC")
+			}
+
+			if err == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var d DatabaseResponse
+					var pID sql.NullString
+					if err := rows.Scan(&d.ID, &d.Slug, &d.Name, &d.Category, &d.URL, &pID, &d.Status, &d.CreatedAt, &d.UpdatedAt); err == nil {
+						d.IsCore = false
+						if pID.Valid {
+							d.ProductID = pID.String
+						}
+						mu.Lock()
+						resp = append(resp, d)
+						mu.Unlock()
 					}
-					resp = append(resp, d)
 				}
 			}
-		}
+		}(gDB)
 	}
 
+	wg.Wait()
 	return c.JSON(fiber.Map{"success": true, "databases": resp})
 }
 
@@ -271,9 +281,27 @@ func AddDatabase(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": true, "message": "Invalid category"})
 	}
 
-	// 1. Calculate Auto-Index for Name
+	// 0. Resolve target shard for the product
+	targetShard := database.Router.GetGlobalManagerDB() // Default
+	if req.ProductID != "" {
+		found := false
+		for _, db := range database.Router.GetAllGlobalManagerDBs() {
+			var exists int
+			db.QueryRow("SELECT 1 FROM managed_products WHERE id = ?", req.ProductID).Scan(&exists)
+			if exists == 1 {
+				targetShard = db
+				found = true
+				break
+			}
+		}
+		if !found {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": true, "message": "The linked product does not exist on any infrastructure shard"})
+		}
+	}
+
+	// 1. Calculate Auto-Index for Name on the target shard
 	var count int
-	err := database.Router.GetGlobalManagerDB().QueryRow(
+	err := targetShard.QueryRow(
 		"SELECT COUNT(*) FROM managed_databases WHERE category = ?", 
 		req.Category,
 	).Scan(&count)
@@ -284,13 +312,12 @@ func AddDatabase(c *fiber.Ctx) error {
 	// Set final name: e.g., "User Shard 0"
 	finalName := fmt.Sprintf("%s %d", baseName, count)
 	if req.Name != "" {
-		// If user provided a name, we can still use it or override.
-		// User requested auto, so we prioritize the generated one.
 		finalName = req.Name 
 	}
-	// 1. Check for Duplicate URL
+
+	// 1. Check for Duplicate URL on target shard
 	var exists int
-	database.Router.GetGlobalManagerDB().QueryRow(
+	targetShard.QueryRow(
 		"SELECT COUNT(*) FROM managed_databases WHERE db_url = ?", 
 		req.URL,
 	).Scan(&exists)
@@ -316,13 +343,13 @@ func AddDatabase(c *fiber.Ctx) error {
 	id := uuid.New().String()
 	now := time.Now().Unix()
 
-	_, err = database.Router.GetGlobalManagerDB().Exec(
+	_, err = targetShard.Exec(
 		"INSERT INTO managed_databases (id, slug, name, category, db_url, encrypted_token, product_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
 		id, slug, finalName, req.Category, req.URL, encrypted, req.ProductID, now, now,
 	)
 	if err != nil {
 		log.Printf("Failed to save DB: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": true, "message": "Failed to save database config"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": true, "message": "Failed to save database config to fleet"})
 	}
 
 	logAudit("ADD_DATABASE", req.Category, ip, fmt.Sprintf("Added DB: %s (%s)", finalName, req.URL))
@@ -762,49 +789,50 @@ func DeleteProduct(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Confirmation phrase mismatch"})
 	}
 
-	// 4. Find linked shards
-	rows, err := database.Router.GetGlobalManagerDB().Query("SELECT slug, name FROM managed_databases WHERE product_id = ?", id)
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var slug, shardName string
-			if err := rows.Scan(&slug, &shardName); err == nil {
-				// WIPE SHARD DATA
-				targetDB := database.Router.GetManagedDBBySlug(slug)
-				if targetDB != nil {
-					// Drop all tables
-					tRows, _ := targetDB.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-					if tRows != nil {
-						var tables []string
-						for tRows.Next() {
-							var tName string
-							tRows.Scan(&tName)
-							tables = append(tables, tName)
+	// 4. Find and Cleanup linked shards across ALL Global Manager Shards
+	for _, db := range database.Router.GetAllGlobalManagerDBs() {
+		rows, err := db.Query("SELECT slug, name FROM managed_databases WHERE product_id = ?", id)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var slug, shardName string
+				if err := rows.Scan(&slug, &shardName); err == nil {
+					// WIPE SHARD DATA
+					targetDB := database.Router.GetManagedDBBySlug(slug)
+					if targetDB != nil {
+						// Drop all tables in the managed shard
+						tRows, _ := targetDB.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+						if tRows != nil {
+							var tables []string
+							for tRows.Next() {
+								var tName string
+								tRows.Scan(&tName)
+								tables = append(tables, tName)
+							}
+							tRows.Close()
+							for _, tName := range tables {
+								targetDB.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tName))
+							}
+							targetDB.Exec("VACUUM")
 						}
-						tRows.Close()
-						for _, tName := range tables {
-							targetDB.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tName))
-						}
-						targetDB.Exec("VACUUM")
 					}
+					// Set product_id to NULL (Moves to Unused Shards) on THIS specific global shard
+					db.Exec("UPDATE managed_databases SET product_id = NULL WHERE slug = ?", slug)
 				}
-				// Set product_id to NULL (Moves to Unused Shards)
-				database.Router.GetGlobalManagerDB().Exec("UPDATE managed_databases SET product_id = NULL WHERE slug = ?", slug)
 			}
 		}
 	}
 
-	// 5. Delete Product
+	// 5. Delete Product & OAuth Clients across shards
 	var deleteFound bool
 	for _, db := range database.Router.GetAllGlobalManagerDBs() {
+		// Cleanup OAuth clients first (though cascade is on, explicit is safer in multi-shard)
+		db.Exec("DELETE FROM oauth_clients WHERE product_id = ?", id)
+		
 		res, err := db.Exec("DELETE FROM managed_products WHERE id = ?", id)
 		if err == nil {
 			count, _ := res.RowsAffected()
 			if count > 0 {
-				// Also delete OAuth client from the same shard
-				db.Exec("DELETE FROM oauth_clients WHERE product_id = ?", id)
-				// And cleanup managed_databases on THIS shard if they exist
-				db.Exec("DELETE FROM managed_databases WHERE product_id = ?", id)
 				deleteFound = true
 				break
 			}

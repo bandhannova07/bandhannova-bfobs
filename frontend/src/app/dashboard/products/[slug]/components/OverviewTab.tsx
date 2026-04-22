@@ -150,5 +150,6 @@ export default function OverviewTab({ product }: OverviewTabProps) {
            </div>
         </div>
       </div>
+    </div>
   );
 }

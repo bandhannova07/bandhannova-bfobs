@@ -53,6 +53,7 @@ func SetupRoutes(app *fiber.App) {
 	// Admin Control Center (Requires Master Key HMAC)
 	adminGroup := api.Group("/admin")
 	adminGroup.Post("/login", middleware.AdminLoginRateLimiter(), admin.AdminLogin)
+	adminGroup.Post("/developer/login", admin.DeveloperLogin)
 	admin.InitWebAuthn(adminGroup)
 
 	// Protected Admin Routes

@@ -21,11 +21,22 @@ export default function ProductDetailDashboard() {
   const params = useParams();
   const slug = params.slug as string;
   const router = useRouter();
-  const [product, setProduct] = useState<Product | null>(null);
+  const [product, setProduct] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
+    const role = sessionStorage.getItem("user_role");
+    const allowedSlug = sessionStorage.getItem("product_slug");
+    setUserRole(role);
+
+    // Security: Developers can only access their assigned product
+    if (role === "developer" && slug !== allowedSlug) {
+      router.push(`/dashboard/products/${allowedSlug}`);
+      return;
+    }
+
     loadProductDetails();
   }, [slug]);
 
@@ -41,6 +52,11 @@ export default function ProductDetailDashboard() {
     }
   };
 
+  const handleLogout = () => {
+    sessionStorage.clear();
+    router.push(userRole === "developer" ? "/developer/login" : "/");
+  };
+
   if (loading) return <div className={styles.loading}>ESTABLISHING CONNECTION...</div>;
   if (!product) return <div className={styles.error}>INFRASTRUCTURE NOT FOUND</div>;
 
@@ -49,21 +65,31 @@ export default function ProductDetailDashboard() {
       {/* ─── Product Header ─────────────────────────── */}
       <div className={styles.header}>
         <div className={styles.titleArea}>
-           <button className={styles.backBtn} onClick={() => router.push("/dashboard/products")}>←</button>
-           <div className={styles.icon}>
-              {product.slug === "auth" ? "🔐" : 
-               product.slug === "analytics" ? "📈" : 
-               product.slug === "market" ? "💰" : 
-               product.slug === "ai" ? "🤖" : "📦"}
-           </div>
-           <div>
-              <h1 className={styles.title}>{product.name}</h1>
-              <code className={styles.url}>bdn-bfobs://{product.slug}/{product.gateway_code || "..."}/gateway/</code>
-           </div>
+            {userRole !== "developer" && (
+              <button className={styles.backBtn} onClick={() => router.push("/dashboard/products")}>←</button>
+            )}
+            <div className={styles.icon}>
+               {product.slug === "auth" ? "🔐" : 
+                product.slug === "analytics" ? "📈" : 
+                product.slug === "market" ? "💰" : 
+                product.slug === "ai" ? "🤖" : "📦"}
+            </div>
+            <div>
+               <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                 <h1 className={styles.title}>{product.name}</h1>
+                 {userRole === "developer" && <span style={{fontSize:'10px', background:'rgba(16,185,129,0.1)', color:'#10b981', padding:'2px 8px', borderRadius:'4px', border:'1px solid rgba(16,185,129,0.2)'}}>PRODUCT PORTAL</span>}
+               </div>
+               <code className={styles.url}>bdn-bfobs://{product.slug}/{product.gateway_code || "..."}/gateway/</code>
+            </div>
         </div>
-        <div className={styles.statusBadge}>
-           <div className={styles.dot}></div>
-           INFRASTRUCTURE LIVE
+        <div style={{display:'flex', gap:'10px', alignItems:'center'}}>
+          {userRole === "developer" && (
+            <button className="btn btn-glass" style={{fontSize:'12px'}} onClick={handleLogout}>LOGOUT</button>
+          )}
+          <div className={styles.statusBadge}>
+             <div className={styles.dot}></div>
+             INFRASTRUCTURE LIVE
+          </div>
         </div>
       </div>
 

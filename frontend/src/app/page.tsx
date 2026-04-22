@@ -74,6 +74,15 @@ export default function LoginPage() {
             {loading ? "Authenticating..." : "ATTEMPT ACCESS"}
           </button>
         </form>
+
+        <div style={{ marginTop: '20px', textAlign: 'center' }}>
+          <button 
+            onClick={() => router.push("/developer/login")}
+            style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            Developer Portal
+          </button>
+        </div>
       </div>
     </div>
   );

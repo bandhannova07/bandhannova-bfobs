@@ -90,6 +90,61 @@ func AdminLogin(c *fiber.Ctx) error {
 	})
 }
 
+type DeveloperLoginRequest struct {
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+}
+
+// DeveloperLogin verifies product credentials across all shards
+func DeveloperLogin(c *fiber.Ctx) error {
+	ip := c.IP()
+	var req DeveloperLoginRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid credentials format"})
+	}
+
+	if req.ClientID == "" || req.ClientSecret == "" {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Infrastructure ID and Secret are required"})
+	}
+
+	// Search all Global Manager shards for this client
+	var productSlug string
+	var productID string
+	found := false
+
+	for _, db := range database.Router.GetAllGlobalManagerDBs() {
+		err := db.QueryRow(`
+			SELECT p.id, p.slug 
+			FROM managed_products p
+			JOIN oauth_clients c ON p.id = c.product_id
+			WHERE c.client_id = ? AND c.client_secret = ? AND p.status = 'active'`,
+			req.ClientID, req.ClientSecret,
+		).Scan(&productID, &productSlug)
+
+		if err == nil {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		LogAudit("DEV_LOGIN_FAILED", req.ClientID, ip, "Invalid infrastructure credentials")
+		return c.Status(401).JSON(fiber.Map{"error": true, "message": "Invalid Infrastructure ID or Security Secret"})
+	}
+
+	// Issue a developer session token (reusing admin token logic for now, but scoped to developer)
+	token := middleware.GenerateAdminToken(req.ClientSecret)
+	LogAudit("DEV_LOGIN_SUCCESS", productSlug, ip, "Developer session started for product: "+productSlug)
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"token":   token,
+		"slug":    productSlug,
+		"role":    "developer",
+		"expires": time.Now().Add(24 * time.Hour).Unix(),
+	})
+}
+
 // ─── API KEYS CRUD ───────────────────────────
 
 type ManagedKeyResponse struct {

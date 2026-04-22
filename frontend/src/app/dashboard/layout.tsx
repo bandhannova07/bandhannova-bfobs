@@ -25,6 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: "Overview", path: "/dashboard", icon: "📊" },
     { name: "API Keys", path: "/dashboard/keys", icon: "🔑" },
     { name: "Products", path: "/dashboard/products", icon: "📦" },
+    { name: "Documentation", path: "/dashboard/docs", icon: "📚" },
     { name: "Default Shards", path: "/dashboard/infrastructure", icon: "⚙️" },
     { name: "Security", path: "/dashboard/security", icon: "🛡️" },
     { name: "Audit Log", path: "/dashboard/audit", icon: "📋" },

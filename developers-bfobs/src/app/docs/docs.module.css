@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 30px;
-  padding: 40px 60px 80px 60px;
+  padding: 50px 100px 100px 100px;
   animation: fadeIn 0.5s ease;
 }
 
@@ -111,8 +111,15 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 768px) {
@@ -121,11 +128,11 @@
     align-items: flex-start;
     gap: 20px;
   }
-  
+
   .copyBtn {
     width: 100%;
   }
-  
+
   .docsContent {
     padding: 20px;
   }

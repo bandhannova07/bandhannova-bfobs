@@ -196,35 +196,45 @@ export default function StorageView({ product }: StorageViewProps) {
         </button>
       </div>
 
-      <div className={styles.bucketGrid}>
-        {buckets.map(b => (
-          <div key={b.id} className={styles.bucketCard}>
-            <button className={styles.deleteBucketBtn} onClick={() => setShowDeleteModal(b)}>🗑️</button>
-            <div className={styles.bucketIcon}>{b.is_public ? "🌍" : "🔒"}</div>
-            <div className={styles.bucketInfo}>
-              <h4>{b.name}</h4>
-              <p>{b.description || "No description provided."}</p>
+      {loading ? (
+        <div className={styles.loading}>SYNCING STORAGE BUCKET...</div>
+      ) : buckets.length === 0 ? (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyIcon}>🗃️</div>
+          <p>No dedicated buckets assigned to this product.</p>
+          <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={() => setShowCreateModal(true)}>Create First Bucket</button>
+        </div>
+      ) : (
+        <div className={styles.bucketGrid}>
+          {buckets.map(b => (
+            <div key={b.id} className={styles.bucketCard}>
+              <button className={styles.deleteBucketBtn} onClick={() => setShowDeleteModal(b)}>🗑️</button>
+              <div className={styles.bucketIcon}>{b.is_public ? "🌍" : "🔒"}</div>
+              <div className={styles.bucketInfo}>
+                <h4>{b.name}</h4>
+                <p>{b.description || "No description provided."}</p>
+              </div>
+              <div className={styles.bucketMeta}>
+                <span className={`${styles.badge} ${b.is_public ? styles.publicBadge : styles.privateBadge}`}>
+                  {b.is_public ? "Public" : "Private"}
+                </span>
+                <code>/{b.slug}</code>
+              </div>
+              <div className={styles.bucketActions}>
+                <button className={styles.actionBtn} onClick={() => copyToClipboard(`${API_URL}/storage/upload?bucket=${b.slug}`)}>
+                  🔗 Upload URL
+                </button>
+                <button className={styles.actionBtn} onClick={() => copyToClipboard(`${window.location.origin.replace('3000', '8080')}/storage/view/${product.slug}/${b.slug}/{file}`)}>
+                  🖼️ View URL
+                </button>
+                <button className={`${styles.actionBtn} btn-primary`} style={{ gridColumn: "span 2", marginTop: "5px" }} onClick={() => openBucket(b)}>
+                  📂 Open Bucket
+                </button>
+              </div>
             </div>
-            <div className={styles.bucketMeta}>
-              <span className={`${styles.badge} ${b.is_public ? styles.publicBadge : styles.privateBadge}`}>
-                {b.is_public ? "Public" : "Private"}
-              </span>
-              <code>/{b.slug}</code>
-            </div>
-            <div className={styles.bucketActions}>
-              <button className={styles.actionBtn} onClick={() => copyToClipboard(`${API_URL}/storage/upload?bucket=${b.slug}`)}>
-                🔗 Upload URL
-              </button>
-              <button className={styles.actionBtn} onClick={() => copyToClipboard(`${window.location.origin.replace('3000', '8080')}/storage/view/${product.slug}/${b.slug}/{file}`)}>
-                🖼️ View URL
-              </button>
-              <button className={`${styles.actionBtn} btn-primary`} style={{ gridColumn: "span 2", marginTop: "5px" }} onClick={() => openBucket(b)}>
-                📂 Open Bucket
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* File Explorer Overlay */}
       {activeBucket && (
@@ -303,7 +313,7 @@ export default function StorageView({ product }: StorageViewProps) {
               />
             </div>
             <div className={styles.modalActions}>
-              <button className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>Cancel</button>
+              <button className={styles.clearBtn} onClick={() => setShowCreateModal(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleCreateBucket}>Create Bucket</button>
             </div>
           </div>

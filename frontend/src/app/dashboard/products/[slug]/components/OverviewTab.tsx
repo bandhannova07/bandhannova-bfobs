@@ -20,11 +20,14 @@ interface OverviewTabProps {
 export default function OverviewTab({ product }: OverviewTabProps) {
   const [showToken, setShowToken] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
   const gatewayUrl = `bdn-bfobs://${product.slug}/${product.gateway_code || "provisioning"}/gateway/`;
 
-  const copyToClipboard = (text: string) => {
+  const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
+    setCopyStatus(label);
+    setTimeout(() => setCopyStatus(null), 2000);
   };
 
   return (
@@ -36,10 +39,17 @@ export default function OverviewTab({ product }: OverviewTabProps) {
            
            <div className={styles.credentials}>
               <h3>Gateway Credentials</h3>
+              
               <div className={styles.field}>
                 <label>Infrastructure ID</label>
-                <code>{product.client_id || "PROVISIONING..."}</code>
+                <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                  <code>{product.client_id || "PROVISIONING..."}</code>
+                  <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => copyToClipboard(product.client_id || "", "id")}>
+                    {copyStatus === "id" ? "✓" : "Copy"}
+                  </button>
+                </div>
               </div>
+
               <div className={styles.field}>
                 <label>Security Secret</label>
                 <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
@@ -47,8 +57,14 @@ export default function OverviewTab({ product }: OverviewTabProps) {
                   <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => setShowSecret(!showSecret)}>
                     {showSecret ? "Hide" : "Show"}
                   </button>
+                  {showSecret && (
+                    <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => copyToClipboard(product.client_secret || "", "secret")}>
+                      {copyStatus === "secret" ? "✓" : "Copy"}
+                    </button>
+                  )}
                 </div>
               </div>
+
               <div className={styles.field}>
                 <label>Product Access Token <span style={{fontSize:'10px',color:'#10b981'}}>(API Key for Developers)</span></label>
                 <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
@@ -56,7 +72,11 @@ export default function OverviewTab({ product }: OverviewTabProps) {
                   <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => setShowToken(!showToken)}>
                     {showToken ? "Hide" : "Show"}
                   </button>
-                  {showToken && <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => copyToClipboard(product.access_token || "")}>Copy</button>}
+                  {showToken && (
+                    <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => copyToClipboard(product.access_token || "", "token")}>
+                      {copyStatus === "token" ? "✓" : "Copy"}
+                    </button>
+                  )}
                 </div>
               </div>
            </div>
@@ -76,15 +96,32 @@ export default function OverviewTab({ product }: OverviewTabProps) {
               <h4>Access Protocols</h4>
               <div className={styles.protocolList}>
                  <div className={styles.protocol}>
-                    <span>Gateway URL</span>
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <span>Gateway URL</span>
+                      <button className="btn btn-glass" style={{fontSize:'9px',padding:'2px 6px'}} onClick={() => copyToClipboard(gatewayUrl, "gate")}>
+                        {copyStatus === "gate" ? "✓" : "Copy"}
+                      </button>
+                    </div>
                     <code style={{color:'#10b981'}}>{gatewayUrl}</code>
                  </div>
+
                  <div className={styles.protocol}>
-                    <span>Database Proxy</span>
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <span>Database Proxy</span>
+                      <button className="btn btn-glass" style={{fontSize:'9px',padding:'2px 6px'}} onClick={() => copyToClipboard(`/db/p/${product.slug}/execute`, "db")}>
+                        {copyStatus === "db" ? "✓" : "Copy"}
+                      </button>
+                    </div>
                     <code>/db/p/{product.slug}/execute</code>
                  </div>
+
                  <div className={styles.protocol}>
-                    <span>Storage CDN</span>
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <span>Storage CDN</span>
+                      <button className="btn btn-glass" style={{fontSize:'9px',padding:'2px 6px'}} onClick={() => copyToClipboard(`/storage/view/${product.slug}/{bucket}/{file}`, "cdn")}>
+                        {copyStatus === "cdn" ? "✓" : "Copy"}
+                      </button>
+                    </div>
                     <code>/storage/view/{product.slug}/&#123;bucket&#125;/&#123;file&#125;</code>
                  </div>
               </div>

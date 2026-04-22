@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import styles from "./page.module.css";
-import { getShards, addShard, updateShard, removeShard, queryShard, clearShard } from "../../../lib/api";
+import { getShards, addShard, updateShard, removeShard } from "../../../lib/api";
+import DatabaseViewer from "../products/[slug]/components/DatabaseViewer";
 
 interface Shard {
   id: string;
@@ -46,12 +47,8 @@ export default function InfrastructurePage() {
     token: ""
   });
 
-  const [inspectShard, setInspectShard] = useState<Shard | null>(null);
-  const [tables, setTables] = useState<any[]>([]);
-  const [selectedTable, setSelectedTable] = useState<string>("");
-  const [tableData, setTableData] = useState<any[]>([]);
-  const [tableCols, setTableCols] = useState<string[]>([]);
-  const [isInspectorLoading, setIsInspectorLoading] = useState(false);
+  const [isInspectStudioOpen, setIsInspectStudioOpen] = useState(false);
+  const [selectedShardForStudio, setSelectedShardForStudio] = useState<Shard | null>(null);
 
   useEffect(() => {
     loadShards();
@@ -70,69 +67,11 @@ export default function InfrastructurePage() {
     setIsLoading(false);
   };
 
-  const handleOpenInspect = async (shard: Shard) => {
-    setInspectShard(shard);
-    setIsInspectorLoading(true);
-    setTableData([]);
-    setSelectedTable("");
-    try {
-      const res = await queryShard(shard.id, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
-      if (res.success) {
-        setTables(res.data || []);
-      }
-    } catch (error) {
-      alert("Failed to connect to shard for inspection");
-    }
-    setIsInspectorLoading(false);
+  const handleOpenInspect = (shard: Shard) => {
+    setSelectedShardForStudio(shard);
+    setIsInspectStudioOpen(true);
   };
 
-  const loadTableData = async (tableName: string) => {
-    setSelectedTable(tableName);
-    setIsInspectorLoading(true);
-    try {
-      const res = await queryShard(inspectShard!.id, `SELECT * FROM ${tableName} LIMIT 100`);
-      if (res.success) {
-        setTableData(res.data || []);
-        setTableCols(res.columns || []);
-      }
-    } catch (error) {
-      alert("Failed to load table data");
-    }
-    setIsInspectorLoading(false);
-  };
-
-  const [wasReset, setWasReset] = useState(false);
-
-  const handleCloseInspect = async () => {
-    if (inspectShard && wasReset) {
-      try {
-        await initShard(inspectShard.id);
-        loadShards();
-      } catch (error) {
-        console.error("Failed to auto-init shard", error);
-      }
-    }
-    setInspectShard(null);
-    setWasReset(false);
-  };
-
-  const handleFactoryReset = async () => {
-    if (!confirm("CRITICAL: This will PERMANENTLY WIPE everything (Tables, Indexes, Data) in this shard. Re-initialization will occur automatically when you close this inspector. Proceed?")) return;
-    setIsInspectorLoading(true);
-    try {
-      const res = await clearShard(inspectShard!.id);
-      if (res.success) {
-        setWasReset(true);
-        setTables([]);
-        setTableData([]);
-        setSelectedTable("");
-        alert("Shard totally wiped. Tables will be re-created automatically when you close this window.");
-      }
-    } catch (error) {
-      alert("Failed to reset shard");
-    }
-    setIsInspectorLoading(false);
-  };
 
   const handleOpenAdd = () => {
     setEditingShard(null);
@@ -258,62 +197,12 @@ export default function InfrastructurePage() {
         </div>
       )}
 
-      {/* Inspector Modal */}
-      {inspectShard && (
-        <div className={styles.modalOverlay} onClick={handleCloseInspect}>
-          <div className={`${styles.modal} ${styles.inspectorModal}`} onClick={e => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <div className={styles.headerTop}>
-                <h3 className={styles.modalTitle}>Shard Explorer: {inspectShard.name}</h3>
-                <button onClick={handleCloseInspect} className={styles.closeBtn}>×</button>
-              </div>
-              <div className={styles.inspectorActions}>
-                <div className={styles.tableSelector}>
-                  {tables.map(t => (
-                    <button 
-                      key={t.name} 
-                      onClick={() => loadTableData(t.name)}
-                      className={`${styles.tableTag} ${selectedTable === t.name ? styles.tableTagActive : ""}`}
-                    >
-                      {t.name}
-                    </button>
-                  ))}
-                  {tables.length === 0 && <span className={styles.noTables}>No tables found</span>}
-                </div>
-                <button onClick={handleFactoryReset} className={styles.resetBtn}>Factory Reset</button>
-              </div>
-            </div>
-            
-            <div className={styles.inspectorBody}>
-              {isInspectorLoading ? (
-                <div className={styles.innerLoading}><div className={styles.spinner}></div></div>
-              ) : selectedTable ? (
-                <div className={styles.tableWrapper}>
-                  <table className={styles.dataTable}>
-                    <thead>
-                      <tr>
-                        {tableCols.map(col => <th key={col}>{col}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tableData.map((row, i) => (
-                        <tr key={i}>
-                          {tableCols.map(col => <td key={col}>{String(row[col])}</td>)}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {tableData.length === 0 && <p className={styles.noData}>No rows in this table</p>}
-                </div>
-              ) : (
-                <div className={styles.welcomeInspector}>
-                  <div className={styles.welcomeIcon}>🔍</div>
-                  <p>Select a table to browse data on {inspectShard.name}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* Shard Studio Studio Overlay */}
+      {isInspectStudioOpen && selectedShardForStudio && (
+        <DatabaseViewer 
+          shard={selectedShardForStudio} 
+          onClose={() => setIsInspectStudioOpen(false)} 
+        />
       )}
 
       {isModalOpen && (

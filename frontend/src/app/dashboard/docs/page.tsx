@@ -72,6 +72,55 @@ Use the **BFOBS Proxy Gateway** to execute queries securely.
 - **Confirmation:** Requires typing **"DELETE"** for decommissioning shards or products.
 
 ---
+
+## 5. Integration Guide: How to Use in Your Project
+To integrate your project with the BandhanNova ecosystem, follow this standardized workflow:
+
+### A. Authentication Flow
+Every project must authenticate using its **Product Credentials**. 
+1.  **Request Token:** Exchange your `Client ID` and `Client Secret` for a session token.
+2.  **Store Token:** Keep the token in your backend environment variables (e.g., `BF_TOKEN`).
+
+### B. Accessing Your Database
+Use the **Global Proxy Gateway** instead of connecting directly to Turso. This allows BandhanNova to rotate shards without breaking your app.
+
+**Standard URL Pattern:**
+- **Proxy Gateway:** `https://api.bandhannova.in/api/db/p/:product_slug/execute`
+- **Asset Storage:** `https://assets.bandhannova.in/:product_slug/:filename`
+
+---
+
+## 6. Security & Best Practices
+Security is the backbone of the BandhanNova ecosystem. Follow these strict rules:
+
+1.  **Never Expose Master Key:** The \`BANDHANNOVA_MASTER_KEY\` is only for administrative tasks. Never use it in client-side code or product backends.
+2.  **Use Product Tokens:** Always use the OAuth token generated for your specific product.
+3.  **Encrypted Transport:** All API calls MUST be made over HTTPS.
+4.  **Least Privilege:** Ensure your queries only access necessary tables. Use the **Shard Studio** to test queries before deploying to production.
+
+---
+
+## 7. Developer API Reference
+
+### Execute SQL (Fleet Orchestration)
+Run SQL queries across your product's dedicated shard fleet.
+
+**Endpoint:** \`POST /api/db/p/:product_slug/execute\`
+
+| Header | Value |
+| :--- | :--- |
+| \`Authorization\` | \`Bearer <Your_Product_Token>\` |
+| \`Content-Type\` | \`application/json\` |
+
+**Request Body:**
+\`\`\`json
+{
+  "query": "INSERT INTO users (name, email) VALUES (?, ?)",
+  "params": ["Bandhan Developer", "dev@bandhannova.in"]
+}
+\`\`\`
+
+---
 **BandhanNova Infrastructure: Built for the Edge. Engineered for Scale.**`;
 
 export default function DocsPage() {

@@ -156,7 +156,26 @@ func ReloadManagedAPIKeys() error {
 
 // ListDatabases returns all active databases (core + managed)
 func ListDatabases(c *fiber.Ctx) error {
+	role, _ := c.Locals("user_role").(string)
+	allowedSlug, _ := c.Locals("allowed_slug").(string)
 	productID := c.Query("product_id")
+
+	// If developer, they can only see databases for THEIR product
+	if role == "developer" {
+		// We need to find the product ID for the allowed slug
+		var pID string
+		for _, db := range database.Router.GetAllGlobalManagerDBs() {
+			err := db.QueryRow("SELECT id FROM managed_products WHERE slug = ?", allowedSlug).Scan(&pID)
+			if err == nil {
+				productID = pID
+				break
+			}
+		}
+		if productID == "" {
+			return c.Status(403).JSON(fiber.Map{"error": true, "message": "Unauthorized: Product mapping failed"})
+		}
+	}
+
 	var resp []DatabaseResponse
 
 	// 1. Core Databases (Only if NO product_id is provided)
@@ -432,6 +451,9 @@ func GetDatabaseDetails(c *fiber.Ctx) error {
 // ─── PRODUCT MANAGEMENT ───────────────────────────────────────────────────
 
 func ListProducts(c *fiber.Ctx) error {
+	role, _ := c.Locals("user_role").(string)
+	allowedSlug, _ := c.Locals("allowed_slug").(string)
+
 	if database.Router == nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Router not initialized"})
 	}
@@ -444,12 +466,18 @@ func ListProducts(c *fiber.Ctx) error {
 		wg.Add(1)
 		go func(db *sql.DB) {
 			defer wg.Done()
-			rows, err := db.Query(`
+			query := `
 				SELECT p.id, p.name, p.slug, p.app_type, p.app_url, p.description, p.icon, p.status, p.created_at, p.updated_at, c.client_id, c.client_secret
 				FROM managed_products p
 				LEFT JOIN oauth_clients c ON p.id = c.product_id
-				ORDER BY p.created_at DESC
-			`)
+			`
+			var rows *sql.Rows
+			var err error
+			if role == "developer" {
+				rows, err = db.Query(query + " WHERE p.slug = ?", allowedSlug)
+			} else {
+				rows, err = db.Query(query + " ORDER BY p.created_at DESC")
+			}
 			if err != nil {
 				return
 			}
@@ -480,8 +508,16 @@ func ListProducts(c *fiber.Ctx) error {
 // GetProductDetails fetches a single product by its slug across all shards
 func GetProductDetails(c *fiber.Ctx) error {
 	slug := c.Params("slug")
+	role, _ := c.Locals("user_role").(string)
+	allowedSlug, _ := c.Locals("allowed_slug").(string)
+
 	if slug == "" {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Slug is required"})
+	}
+
+	// Developer Security Check
+	if role == "developer" && slug != allowedSlug {
+		return c.Status(403).JSON(fiber.Map{"error": true, "message": "Access denied: You can only manage your assigned infrastructure"})
 	}
 
 	var p ProductResponse

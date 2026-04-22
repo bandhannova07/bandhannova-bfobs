@@ -132,8 +132,8 @@ func DeveloperLogin(c *fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"error": true, "message": "Invalid Infrastructure ID or Security Secret"})
 	}
 
-	// Issue a developer session token (reusing admin token logic for now, but scoped to developer)
-	token := middleware.GenerateAdminToken(req.ClientSecret)
+	// Issue a developer session token scoped to the product slug
+	token := middleware.GenerateSessionToken(productSlug, req.ClientSecret)
 	LogAudit("DEV_LOGIN_SUCCESS", productSlug, ip, "Developer session started for product: "+productSlug)
 
 	return c.JSON(fiber.Map{

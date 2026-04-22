@@ -55,22 +55,37 @@ func ProvisionDatabase(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Name, URL and Token are required for manual shard addition"})
 	}
 
-	// 1. Test Connection
+	// 1. Find which Global Manager Shard has this product (CRITICAL for Foreign Key)
+	var targetGDB *sql.DB
+	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+		var exists int
+		err := gDB.QueryRow("SELECT 1 FROM managed_products WHERE id = ?", req.ProductID).Scan(&exists)
+		if err == nil && exists == 1 {
+			targetGDB = gDB
+			break
+		}
+	}
+
+	if targetGDB == nil {
+		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Associated product not found on any global shard. Shard registration failed."})
+	}
+
+	// 2. Test Connection to the new shard
 	testDB, err := database.ConnectTurso(req.URL, req.Token)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Failed to connect to the provided Turso URL: " + err.Error()})
 	}
 	defer testDB.Close()
 
-	// 2. Encrypt Token
+	// 3. Encrypt Token
 	encrypted, _ := security.Encrypt(req.Token, config.AppConfig.BandhanNovaMasterKey)
 
-	// 3. Register in Global Manager
+	// 4. Register in the correct Global Manager Shard
 	id := uuid.New().String()
 	slug := strings.ToLower(strings.ReplaceAll(req.Name, " ", "-")) + "-" + uuid.New().String()[:6]
 	now := time.Now().Unix()
 
-	_, err = database.Router.GetGlobalManagerDB().Exec(
+	_, err = targetGDB.Exec(
 		"INSERT INTO managed_databases (id, slug, name, category, db_url, encrypted_token, product_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
 		id, slug, req.Name, req.Category, req.URL, encrypted, req.ProductID, now, now,
 	)
@@ -78,7 +93,7 @@ func ProvisionDatabase(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to register shard: " + err.Error()})
 	}
 
-	// 4. Reload Managed DBs
+	// 5. Reload Managed DBs
 	database_mgmt.ReloadManagedDatabases()
 
 	LogAudit("ADD_PRODUCT_SHARD", req.Name, ip, fmt.Sprintf("Manually added shard: %s for product %s", req.Name, req.ProductID))

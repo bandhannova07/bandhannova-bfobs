@@ -843,3 +843,348 @@
   border-radius: 32px;
   color: var(--text-muted);
 }
+
+/* ─── BandhanNova Shard Studio (Supabase Redesign) ───── */
+.studioRoot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #1c1c1c;
+  color: #ededed;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Inter', sans-serif;
+  animation: studioSlideDown 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes studioSlideDown {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+.studioTopBar {
+  height: 50px;
+  background: #171717;
+  border-bottom: 1px solid #2e2e2e;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+}
+
+.studioBrand {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.studioIcon {
+  font-size: 18px;
+  background: #10b981;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: black;
+}
+
+.studioBreadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.crumbProject { color: #888; }
+.crumbDivider { color: #444; }
+.crumbShard { color: #eee; font-weight: 500; }
+.crumbTable { color: #10b981; font-weight: 600; }
+
+.studioTopActions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.connectionStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.livePulse {
+  width: 6px;
+  height: 6px;
+  background: #10b981;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulse 1.5s infinite;
+}
+
+.exitStudio {
+  background: #2e2e2e;
+  border: 1px solid #3e3e3e;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.exitStudio kbd {
+  background: #111;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: #888;
+}
+
+.exitStudio:hover {
+  background: #3e3e3e;
+}
+
+.studioLayout {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.studioSidebar {
+  width: 240px;
+  background: #171717;
+  border-right: 1px solid #2e2e2e;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebarSection {
+  padding: 20px 10px 10px;
+}
+
+.sidebarLabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: #555;
+  margin-bottom: 10px;
+  padding-left: 10px;
+  letter-spacing: 1px;
+}
+
+.navItem {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #aaa;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 2px;
+  transition: 0.2s;
+}
+
+.navActive {
+  background: #2e2e2e;
+  color: white;
+}
+
+.tableListScroll {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.tableBtn {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #888;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 6px;
+}
+
+.tableActive {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.studioMain {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #1c1c1c;
+}
+
+.studioToolbox {
+  height: 45px;
+  border-bottom: 1px solid #2e2e2e;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 15px;
+}
+
+.toolBtn {
+  background: #2e2e2e;
+  border: 1px solid #3e3e3e;
+  color: #ccc;
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.toolBtnPrimary {
+  background: #10b981;
+  border: none;
+  color: black;
+  font-weight: 600;
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.gridContainer {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.spreadsheet {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.studioTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
+  font-size: 12px;
+}
+
+.studioTable th {
+  position: sticky;
+  top: 0;
+  background: #171717;
+  padding: 10px 15px;
+  text-align: left;
+  border-right: 1px solid #2e2e2e;
+  border-bottom: 1px solid #2e2e2e;
+  z-index: 100;
+}
+
+.rowNumberCol {
+  width: 40px;
+  color: #444;
+  text-align: center !important;
+}
+
+.thContent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.thType { color: #555; font-size: 10px; font-weight: 400; }
+.thName { color: #eee; font-weight: 600; }
+.pkBadge { background: #10b981; color: black; font-size: 8px; padding: 1px 3px; border-radius: 2px; }
+
+.studioTable td {
+  padding: 8px 15px;
+  border-right: 1px solid #2e2e2e;
+  border-bottom: 1px solid #232323;
+  color: #bbb;
+  white-space: nowrap;
+}
+
+.studioTable tr:nth-child(even) td {
+  background: #1f1f1f;
+}
+
+.studioTable tr:hover td {
+  background: #252525;
+}
+
+.rowNumber {
+  color: #444;
+  text-align: center;
+  background: #171717 !important;
+  border-right: 1px solid #2e2e2e !important;
+}
+
+.nullCell { color: #444; font-style: italic; }
+
+.studioFooter {
+  height: 30px;
+  background: #171717;
+  border-top: 1px solid #2e2e2e;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 15px;
+  font-size: 10px;
+  color: #555;
+}
+
+.footerSep { margin: 0 10px; color: #333; }
+
+.gridOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(28, 28, 28, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  z-index: 200;
+}
+
+.studioSpinner {
+  width: 25px;
+  height: 25px;
+  border: 2px solid #2e2e2e;
+  border-top-color: #10b981;
+  border-radius: 50%;
+  animation: studioSpin 0.6s linear infinite;
+}
+
+@keyframes studioSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+}

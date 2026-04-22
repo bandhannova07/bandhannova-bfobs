@@ -522,6 +522,13 @@ func ReloadKeys(c *fiber.Ctx) error {
 
 	LogAudit("RELOAD_KEYS", "all", ip, fmt.Sprintf("Reloaded %d managed keys across %d providers", reloadCount, len(providerKeys)))
 
+	// Also trigger a full fleet refresh to sync infrastructure shards
+	if err := database.Router.RefreshFleet(config.AppConfig.BandhanNovaMasterKey); err != nil {
+		log.Printf("Admin: Fleet refresh failed during reload: %v", err)
+	} else {
+		log.Println("♻️  Fleet Registry hot-reloaded successfully")
+	}
+
 	return c.JSON(fiber.Map{
 		"success":         true,
 		"message":         "Keys reloaded successfully",

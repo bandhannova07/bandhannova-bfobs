@@ -130,6 +130,7 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
   };
 
   const openInspect = async (db: Shard) => {
+    console.log("[Studio] Inspecting Shard Details:", { id: db.id, name: db.name, url: db.db_url });
     setSelectedShard(db);
     setIsInspectModalOpen(true);
     setInspecting(true);
@@ -139,7 +140,7 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
         body: JSON.stringify({ query: "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'" })
       });
       if (res.success) {
-        setTables(res.data.map((t: any) => t.name));
+        setTables((res.data || []).map((t: any) => t.name));
       }
     } catch (err) {
       console.error(err);

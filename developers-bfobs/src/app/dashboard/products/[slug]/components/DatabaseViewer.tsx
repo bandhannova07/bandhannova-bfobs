@@ -19,6 +19,7 @@ export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadTables();
@@ -27,17 +28,27 @@ export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
   const loadTables = async () => {
     setLoading(true);
     try {
+      console.log(`[Studio] Loading tables for shard: ${shard.id}`);
       const res = await fetchAPI(`/admin/infrastructure/shards/${shard.id}/query`, {
         method: "POST",
         body: JSON.stringify({ query: "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_%'" })
       });
+      
+      console.log(`[Studio] Load tables response:`, res);
+
       if (res.success) {
-        const tableNames = res.data.map((t: any) => t.name);
+        setError(null);
+        const tableNames = (res.data || []).map((t: any) => t.name);
         setTables(tableNames);
-        if (tableNames.length > 0) handleTableSelect(tableNames[0]);
+        if (tableNames.length > 0) {
+          handleTableSelect(tableNames[0]);
+        }
+      } else {
+        setError(res.message || "Failed to load tables");
+        console.error("[Studio] Failed to load tables:", res.message);
       }
     } catch (err) {
-      console.error(err);
+      console.error("[Studio] Error loading tables:", err);
     } finally {
       setLoading(false);
     }
@@ -47,6 +58,8 @@ export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
     setSelectedTable(tableName);
     setFetching(true);
     try {
+      console.log(`[Studio] Fetching data for table: ${tableName} on shard: ${shard.id}`);
+      
       // Fetch Schema using PRAGMA
       const schemaRes = await fetchAPI(`/admin/infrastructure/shards/${shard.id}/query`, {
         method: "POST",
@@ -56,13 +69,28 @@ export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
       // Fetch Data
       const dataRes = await fetchAPI(`/admin/infrastructure/shards/${shard.id}/query`, {
         method: "POST",
-        body: JSON.stringify({ query: `SELECT * FROM "${tableName}" LIMIT 200` })
+        body: JSON.stringify({ query: `SELECT * FROM "${tableName}" LIMIT 500` })
       });
 
-      if (schemaRes.success) setColumns(schemaRes.data);
-      if (dataRes.success) setRows(dataRes.data);
+      console.log(`[Studio] Schema response:`, schemaRes);
+      console.log(`[Studio] Data response:`, dataRes);
+
+      if (schemaRes.success) {
+        setError(null);
+        setColumns(schemaRes.data || []);
+      } else {
+        setError(schemaRes.message || "Failed to fetch schema");
+        console.error("[Studio] Failed to fetch schema:", schemaRes.message);
+      }
+
+      if (dataRes.success) {
+        setRows(dataRes.data || []);
+      } else {
+        setError(dataRes.message || "Failed to fetch rows");
+        console.error("[Studio] Failed to fetch rows:", dataRes.message);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("[Studio] Critical Error during fetch:", err);
     } finally {
       setFetching(false);
     }
@@ -103,20 +131,12 @@ export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
          <aside className={styles.studioSidebar}>
             <div className={styles.sidebarSection}>
                <div className={styles.sidebarLabel}>DATABASE</div>
-               <div className={styles.sidebarNav}>
-                  <button className={`${styles.navItem} ${styles.navActive}`}>
-                     <span className={styles.navIcon}>📁</span>
-                     Tables
-                  </button>
-                  <button className={styles.navItem}>
-                     <span className={styles.navIcon}>🔍</span>
-                     SQL Editor
-                  </button>
-                  <button className={styles.navItem}>
-                     <span className={styles.navIcon}>🛡️</span>
-                     Policies (RLS)
-                  </button>
-               </div>
+                <div className={styles.sidebarNav}>
+                   <button className={`${styles.navItem} ${styles.navActive}`}>
+                      <span className={styles.navIcon}>📁</span>
+                      Tables
+                   </button>
+                </div>
             </div>
 
             <div className={styles.sidebarSection}>
@@ -140,23 +160,27 @@ export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
 
          {/* ─── Main Content: Data Studio ────────────── */}
          <main className={styles.studioMain}>
-            <div className={styles.studioToolbox}>
-               <div className={styles.toolboxLeft}>
-                  <button className={styles.toolBtn}>
-                    <span>Filter</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <span>Sort</span>
-                  </button>
-               </div>
-               <div className={styles.toolboxRight}>
-                  <button className={styles.toolBtnPrimary}>+ Insert Row</button>
-                  <button className={styles.toolBtn}>Export</button>
-               </div>
-            </div>
+             <div className={styles.studioToolbox}>
+                <div className={styles.toolboxLeft}>
+                   <button className={styles.toolBtn}>
+                     <span>Filter</span>
+                   </button>
+                   <button className={styles.toolBtn}>
+                     <span>Sort</span>
+                   </button>
+                </div>
+                <div className={styles.toolboxRight}>
+                   <span className={styles.shardIdLabel}>Shard: {shard.id}</span>
+                </div>
+             </div>
 
             <div className={styles.gridContainer}>
-               {fetching ? (
+               {error ? (
+                 <div className={styles.gridErrorState}>
+                    <div className={styles.bigStudioIcon}>⚠️</div>
+                    <p>{error}</p>
+                 </div>
+               ) : fetching ? (
                  <div className={styles.gridOverlay}>
                     <div className={styles.studioSpinner}></div>
                     <p>Synchronizing data shards...</p>
@@ -207,20 +231,20 @@ export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
                )}
             </div>
 
-            <footer className={styles.studioFooter}>
-               <div className={styles.footerInfo}>
-                  {selectedTable && (
-                    <>
-                      <span>Rows: {rows.length}</span>
-                      <span className={styles.footerSep}>|</span>
-                      <span>Columns: {columns.length}</span>
-                    </>
-                  )}
-               </div>
-               <div className={styles.footerBrand}>
-                  BandhanNova Shard Studio v1.0
-               </div>
-            </footer>
+             <footer className={styles.studioFooter}>
+                <div className={styles.footerInfo}>
+                   {selectedTable && !error && (
+                     <>
+                       <span>Rows: {rows.length}</span>
+                       <span className={styles.footerSep}>|</span>
+                       <span>Columns: {columns.length}</span>
+                     </>
+                   )}
+                </div>
+                <div className={styles.footerBrand}>
+                   BandhanNova Shard Studio v1.2
+                </div>
+             </footer>
          </main>
       </div>
     </div>

@@ -34,10 +34,8 @@ export default function DeveloperLoginPage() {
         sessionStorage.setItem("user_role", "developer");
         sessionStorage.setItem("product_slug", data.slug);
         
-        // Redirect to specific product dashboard
-        setTimeout(() => {
-          router.push(`/dashboard/products/${data.slug}`);
-        }, 300);
+        // Force a full location change to ensure Layout and States re-sync correctly
+        window.location.href = `/dashboard/products/${data.slug}`;
       }
     } catch (err: any) {
       setError(err.message || "Invalid Infrastructure Credentials");

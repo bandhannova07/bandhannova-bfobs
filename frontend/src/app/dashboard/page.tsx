@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
 import { fetchAPI } from "../../lib/api";
 
@@ -45,6 +46,7 @@ interface DashboardData {
 export default function OverviewPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   const loadData = async () => {
     try {
@@ -58,6 +60,14 @@ export default function OverviewPage() {
   };
 
   useEffect(() => {
+    const role = sessionStorage.getItem("user_role");
+    const allowedSlug = sessionStorage.getItem("product_slug");
+    
+    if (role === "developer" && allowedSlug) {
+      router.push(`/dashboard/products/${allowedSlug}`);
+      return;
+    }
+
     loadData();
     const interval = setInterval(loadData, 8000);
     return () => clearInterval(interval);

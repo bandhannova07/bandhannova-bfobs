@@ -64,60 +64,70 @@ export default function ProductDetailDashboard() {
     <div className={styles.container}>
       {/* ─── Product Header ─────────────────────────── */}
       <div className={styles.header}>
-        <div className={styles.titleArea}>
-            {userRole !== "developer" && (
-              <button className={styles.backBtn} onClick={() => router.push("/dashboard/products")}>←</button>
-            )}
-            <div className={styles.icon}>
-               {product.slug === "auth" ? "🔐" : 
-                product.slug === "analytics" ? "📈" : 
-                product.slug === "market" ? "💰" : 
-                product.slug === "ai" ? "🤖" : "📦"}
-            </div>
-            <div>
-               <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-                 <h1 className={styles.title}>{product.name}</h1>
-                 {userRole === "developer" && <span style={{fontSize:'10px', background:'rgba(16,185,129,0.1)', color:'#10b981', padding:'2px 8px', borderRadius:'4px', border:'1px solid rgba(16,185,129,0.2)'}}>PRODUCT PORTAL</span>}
-               </div>
-               <code className={styles.url}>bdn-bfobs://{product.slug}/{product.gateway_code || "..."}/gateway/</code>
-            </div>
-        </div>
-        <div style={{display:'flex', gap:'10px', alignItems:'center'}}>
-          {userRole === "developer" && (
-            <button className="btn btn-glass" style={{fontSize:'12px'}} onClick={handleLogout}>LOGOUT</button>
-          )}
-          <div className={styles.statusBadge}>
-             <div className={styles.dot}></div>
-             INFRASTRUCTURE LIVE
+        <div className={styles.headerLeft}>
+          <div className={styles.breadcrumbs}>
+            <span onClick={() => router.push("/dashboard")}>Dashboard</span>
+            <span className={styles.separator}>/</span>
+            <span onClick={() => router.push("/dashboard/products")}>Infrastructure</span>
+            <span className={styles.separator}>/</span>
+            <span className={styles.current}>{product.name}</span>
           </div>
+          <div className={styles.titleArea}>
+              <div className={styles.icon}>
+                 {product.slug === "auth" ? "🔐" : 
+                  product.slug === "analytics" ? "📈" : 
+                  product.slug === "market" ? "💰" : 
+                  product.slug === "ai" ? "🤖" : "📦"}
+              </div>
+              <div className={styles.titleInfo}>
+                 <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                   <h1 className={styles.title}>{product.name}</h1>
+                   <div className={styles.liveBadge}>
+                      <span className={styles.pulse}></span>
+                      LIVE
+                   </div>
+                 </div>
+                 <code className={styles.url}>bn-bfobs://{product.slug}/{product.gateway_code || "..."}/gateway/</code>
+              </div>
+          </div>
+        </div>
+
+        <div className={styles.headerActions}>
+           <button className="btn btn-glass" onClick={() => window.open("/dashboard/docs", "_blank")}>📖 DOCS</button>
+           <button className="btn btn-glass">📊 MONITOR</button>
+           {userRole === "developer" ? (
+             <button className="btn btn-primary" onClick={handleLogout} style={{background:'var(--danger)'}}>EXIT PORTAL</button>
+           ) : (
+             <button className="btn btn-primary">SETTINGS</button>
+           )}
         </div>
       </div>
 
-      {/* ─── Navigation Tabs ────────────────────────── */}
+      {/* ─── Section Navigation ──────────────────────── */}
       <nav className={styles.tabs}>
         <button 
           className={`${styles.tab} ${activeTab === "overview" ? styles.activeTab : ""}`}
           onClick={() => setActiveTab("overview")}
         >
-          Overview
+          <span className={styles.tabIcon}>📊</span> Overview
         </button>
         <button 
           className={`${styles.tab} ${activeTab === "database" ? styles.activeTab : ""}`}
           onClick={() => setActiveTab("database")}
         >
-          Databases
+          <span className={styles.tabIcon}>🗄️</span> Databases
         </button>
         <button 
           className={`${styles.tab} ${activeTab === "storage" ? styles.activeTab : ""}`}
           onClick={() => setActiveTab("storage")}
         >
-          Storage
+          <span className={styles.tabIcon}>☁️</span> Storage
         </button>
         <button 
           className={`${styles.tab} ${activeTab === "sql" ? styles.activeTab : ""}`}
           onClick={() => setActiveTab("sql")}
         >
-          SQL Forge
+          <span className={styles.tabIcon}>⚡</span> SQL Forge
         </button>
       </nav>
 

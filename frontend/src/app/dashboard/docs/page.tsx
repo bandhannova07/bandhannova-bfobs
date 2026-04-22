@@ -34,7 +34,7 @@ We use a custom orchestration protocol to manage distributed shards. This allows
 Never connect directly to your Turso shards from your client-side apps. Always use the **BFOBS Proxy**.
 
 ### Execute SQL Queries
-**Endpoint (Example):** \`POST /api/db/p/:product_slug/execute\`
+**Endpoint (Example):** \`POST /db/p/{product_slug}/execute\`
 
 **Request Headers:**
 | Header | Value | Description |
@@ -56,11 +56,11 @@ Never connect directly to your Turso shards from your client-side apps. Always u
 Your product is automatically provisioned with an LFS-backed storage bucket.
 
 ### View/Download Files (Example)
-**URL Pattern:** \`/api/storage/view/:product_slug/:bucket_name/:file_path\`
+**URL Pattern:** \`/storage/view/{product_slug}/{bucket_name}/{file_path}\`
 
 ### Uploading Assets (Example)
 Use the **Storage View** in your Product Portal to manage buckets. Developers can upload assets via the portal or use the multi-tenant upload endpoint:
-**Endpoint:** \`POST /api/storage/upload/:product_slug/:bucket_name\`
+**Endpoint:** \`POST /storage/upload/{product_slug}/{bucket_name}\`
 
 ---
 
@@ -84,7 +84,7 @@ A safe environment to run database migrations, test complex queries, and manage 
 ## 6. Integration Example (JavaScript)
 \`\`\`javascript
 const executeQuery = async (sql, params = []) => {
-  const response = await fetch("https://api-hunter.bandhannova.in/api/db/p/your-product-slug/execute", {
+  const response = await fetch("https://api-hunter.bandhannova.in/db/p/{your-product-slug}/execute", {
     method: "POST",
     headers: {
       "Authorization": "Bearer YOUR_ACCESS_TOKEN",
@@ -117,23 +117,23 @@ export default function DocsPage() {
 
   return (
     <div className={styles.docsContainer}>
-       <div className={styles.docsHeader}>
-          <div>
-             <h2 className={styles.title}>System Documentation</h2>
-             <p className={styles.subtitle}>Infrastructure & API Orchestration Guide</p>
-          </div>
-          <button className={`btn btn-primary ${styles.copyBtn}`} onClick={handleCopy}>
-             {copied ? "✓ COPIED TO CLIPBOARD" : "📋 COPY FULL MARKDOWN"}
-          </button>
-       </div>
+      <div className={styles.docsHeader}>
+        <div>
+          <h2 className={styles.title}>System Documentation</h2>
+          <p className={styles.subtitle}>Infrastructure & API Orchestration Guide</p>
+        </div>
+        <button className={`btn btn-primary ${styles.copyBtn}`} onClick={handleCopy}>
+          {copied ? "✓ COPIED TO CLIPBOARD" : "📋 COPY FULL MARKDOWN"}
+        </button>
+      </div>
 
-       <div className={`glass-panel ${styles.docsContent}`}>
-          <div className={styles.markdownWrapper}>
-             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {DOCS_MARKDOWN}
-             </ReactMarkdown>
-          </div>
-       </div>
+      <div className={`glass-panel ${styles.docsContent}`}>
+        <div className={styles.markdownWrapper}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {DOCS_MARKDOWN}
+          </ReactMarkdown>
+        </div>
+      </div>
     </div>
   );
 }

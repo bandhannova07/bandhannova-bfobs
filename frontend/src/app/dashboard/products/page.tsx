@@ -147,36 +147,21 @@ export default function ProductsFleetPage() {
               </div>
               
               <Link href={`/dashboard/products/${p.slug}`} className={styles.cardLink}>
-                <div className={styles.cardHeader}>
-                  <div className={styles.icon}>
-                    {p.slug === "auth" ? "🔐" : 
-                     p.slug === "analytics" ? "📈" : 
-                     p.slug === "market" ? "💰" : 
-                     p.slug === "ai" ? "🤖" : "📦"}
-                  </div>
-                  <div className={styles.statusGroup}>
-                    <span className={styles.statusBadge}>OPERATIONAL</span>
-                  </div>
+                <div className={styles.icon}>
+                  {p.slug === "auth" ? "🔐" : 
+                   p.slug === "analytics" ? "📈" : 
+                   p.slug === "market" ? "💰" : 
+                   p.slug === "ai" ? "🤖" : "📦"}
                 </div>
-
                 <div className={styles.info}>
-                  <div className={styles.slugLabel}>bn-bfobs://{p.slug}</div>
                   <h3>{p.name}</h3>
-                  <p>{p.description || "Unified cluster management for platform assets."}</p>
+                  <p>{p.description || "No description provided for this cluster."}</p>
                 </div>
-
-                <div className={styles.blueprint}>
-                   <div className={styles.blueprintItem}>
-                      <span className={styles.bpKey}>ID</span>
-                      <span className={styles.bpVal}>{p.id.substring(0, 8)}...</span>
-                   </div>
-                   <div className={styles.blueprintItem}>
-                      <span className={styles.bpKey}>SHARDS</span>
-                      <span className={styles.bpVal}>DISTRIBUTED</span>
-                   </div>
+                <div className={styles.meta}>
+                  <span>🗄️ CLUSTER ONLINE</span>
+                  <span>☁️ LFS STORAGE READY</span>
                 </div>
-
-                <div className={styles.arrow}>EXPLORE GATEWAY →</div>
+                <div className={styles.arrow}>→</div>
               </Link>
             </div>
           ))}

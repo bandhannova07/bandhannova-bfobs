@@ -300,62 +300,70 @@
   margin-bottom: 40px;
 }
 
-.badge {
-  font-size: 10px;
+.credentials {
+  background: rgba(255, 255, 255, 0.02);
+  padding: 32px;
+  border-radius: 20px;
+  border: 1px solid var(--glass-stroke);
+}
+
+.credentials h3 {
+  font-size: 14px;
   font-weight: 800;
-  color: var(--primary);
+  text-transform: uppercase;
   letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
 }
 
-.blueprintDivider {
-  height: 1px;
-  background: var(--glass-border);
-  margin: 32px 0;
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
 }
 
-.credGrid {
+.field:last-child { margin-bottom: 0; }
+
+.field label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.field code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--primary);
+  background: rgba(0, 163, 255, 0.05);
+  padding: 12px 16px;
+  border-radius: 12px;
+  word-break: break-all;
+}
+
+.sidebarCards {
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
-.valueRow {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.copyBtn {
-  background: rgba(255, 255, 255, 0.05);
+.miniCard {
+  padding: 24px;
+  border-radius: 20px;
   border: 1px solid var(--glass-border);
-  color: var(--text-primary);
-  font-size: 9px;
+}
+
+.miniCard h4 {
+  font-size: 13px;
   font-weight: 800;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: var(--transition);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
 }
 
-.copyBtn:hover {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: white;
-}
-
-.hint {
-  font-size: 9px;
-  color: var(--success);
-  margin-left: 8px;
-}
-
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.pulseList {
+.statusList {
   list-style: none;
   padding: 0;
   display: flex;
@@ -363,89 +371,45 @@
   gap: 12px;
 }
 
-.pulseList li {
+.statusList li {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
 }
 
-.pulseOk {
+.statusOk {
   color: var(--success);
   font-weight: 800;
-  animation: pulseOpacity 2s infinite;
+  font-size: 11px;
 }
 
-@keyframes pulseOpacity {
-  0% { opacity: 1; }
-  50% { opacity: 0.5; }
-  100% { opacity: 1; }
-}
-
-.protocolStack {
+.protocolList {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.protocolItem {
+.protocol {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
-.protoHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.protoLabel {
-  font-size: 10px;
-  font-weight: 800;
+.protocol span {
+  font-size: 11px;
+  font-weight: 700;
   color: var(--text-muted);
 }
 
-.miniCopy {
-  background: none;
-  border: none;
-  color: var(--primary);
-  font-size: 9px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.protoValue {
-  font-family: var(--font-mono);
+.protocol code {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   color: var(--text-primary);
-  background: rgba(0, 0, 0, 0.2);
-  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid var(--glass-border);
-}
-
-.guidelineList {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.guidelineList li {
-  font-size: 11px;
-  color: var(--text-muted);
-  position: relative;
-  padding-left: 14px;
-}
-
-.guidelineList li::before {
-  content: "•";
-  position: absolute;
-  left: 0;
-  color: var(--primary);
 }
 
 /* Storage View Styles */

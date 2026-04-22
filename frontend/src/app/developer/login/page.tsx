@@ -22,7 +22,7 @@ export default function DeveloperLoginPage() {
     try {
       const data = await fetchAPI("/admin/developer/login", {
         method: "POST",
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           client_id: clientId,
           client_secret: clientSecret
         }),
@@ -33,7 +33,7 @@ export default function DeveloperLoginPage() {
         // Store developer info
         sessionStorage.setItem("user_role", "developer");
         sessionStorage.setItem("product_slug", data.slug);
-        
+
         // Force a full location change to ensure Layout and States re-sync correctly
         window.location.href = `/dashboard/products/${data.slug}`;
       }
@@ -51,12 +51,12 @@ export default function DeveloperLoginPage() {
       </div>
       <div className={`glass-panel ${styles.card}`}>
         <div className={styles.logo}>
-          BN <span>Portal</span>
+          BDN Product <b style={{ color: "#3acb9dff" }}>Portal</b>
         </div>
         <p style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: "14px" }}>
           Product Infrastructure Access
         </p>
-        
+
         <form className={styles.form} onSubmit={handleLogin}>
           <div className={styles.inputGroup}>
             <label>Infrastructure ID</label>
@@ -80,11 +80,11 @@ export default function DeveloperLoginPage() {
               placeholder="Enter security secret..."
             />
           </div>
-          
+
           {error && <div className={styles.error}>{error}</div>}
-          
-          <button 
-            type="submit" 
+
+          <button
+            type="submit"
             className={`btn btn-primary ${styles.submitBtn}`}
             style={{ background: "linear-gradient(135deg, #10b981 0%, #059669 100%)" }}
             disabled={loading}
@@ -92,15 +92,6 @@ export default function DeveloperLoginPage() {
             {loading ? "Verifying..." : "ACCESS PRODUCT"}
           </button>
         </form>
-
-        <div style={{ marginTop: '20px', textAlign: 'center' }}>
-          <button 
-            onClick={() => router.push("/")}
-            style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}
-          >
-            Back to Admin Login
-          </button>
-        </div>
       </div>
     </div>
   );

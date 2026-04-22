@@ -34,110 +34,121 @@ export default function OverviewTab({ product }: OverviewTabProps) {
     <div className={styles.tabContent}>
       <div className={styles.overviewGrid}>
         <div className={`glass-panel ${styles.mainCard}`}>
-           <h2>Core System: {product.name}</h2>
-           <p className={styles.description}>{product.description || "No metadata provided for this cluster."}</p>
+           <div className={styles.cardHeader}>
+              <div className={styles.titleSection}>
+                <span className={styles.badge}>INFRASTRUCTURE CORE</span>
+                <h2>{product.name}</h2>
+              </div>
+              <div className={styles.statusGroup}>
+                <span className={styles.statusBadge}>HEALTHY</span>
+              </div>
+           </div>
            
+           <p className={styles.description}>{product.description || "Unified cluster management for platform assets."}</p>
+           
+           <div className={styles.blueprintDivider} />
+
            <div className={styles.credentials}>
-              <h3>Gateway Credentials</h3>
+              <h3>Authentication Blueprint</h3>
               
-              <div className={styles.field}>
-                <label>Infrastructure ID</label>
-                <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-                  <code>{product.client_id || "PROVISIONING..."}</code>
-                  <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => copyToClipboard(product.client_id || "", "id")}>
-                    {copyStatus === "id" ? "✓" : "Copy"}
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.field}>
-                <label>Security Secret</label>
-                <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-                  <code>{showSecret ? (product.client_secret || "N/A") : "••••••••••••••••"}</code>
-                  <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => setShowSecret(!showSecret)}>
-                    {showSecret ? "Hide" : "Show"}
-                  </button>
-                  {showSecret && (
-                    <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => copyToClipboard(product.client_secret || "", "secret")}>
-                      {copyStatus === "secret" ? "✓" : "Copy"}
+              <div className={styles.credGrid}>
+                <div className={styles.field}>
+                  <label>Infrastructure ID</label>
+                  <div className={styles.valueRow}>
+                    <code>{product.client_id || "PROVISIONING..."}</code>
+                    <button className={styles.copyBtn} onClick={() => copyToClipboard(product.client_id || "", "id")}>
+                      {copyStatus === "id" ? "✓" : "COPY"}
                     </button>
-                  )}
+                  </div>
                 </div>
-              </div>
 
-              <div className={styles.field}>
-                <label>Product Access Token <span style={{fontSize:'10px',color:'#10b981'}}>(API Key for Developers)</span></label>
-                <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-                  <code style={{color:'#10b981'}}>{showToken ? (product.access_token || "N/A") : "bfobs_••••••••••••••••"}</code>
-                  <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => setShowToken(!showToken)}>
-                    {showToken ? "Hide" : "Show"}
-                  </button>
-                  {showToken && (
-                    <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => copyToClipboard(product.access_token || "", "token")}>
-                      {copyStatus === "token" ? "✓" : "Copy"}
+                <div className={styles.field}>
+                  <label>Security Secret</label>
+                  <div className={styles.valueRow}>
+                    <code>{showSecret ? (product.client_secret || "N/A") : "••••••••••••••••••••••••"}</code>
+                    <button className={styles.copyBtn} onClick={() => setShowSecret(!showSecret)}>
+                      {showSecret ? "HIDE" : "SHOW"}
                     </button>
-                  )}
+                    {showSecret && (
+                      <button className={styles.copyBtn} onClick={() => copyToClipboard(product.client_secret || "", "secret")}>
+                        {copyStatus === "secret" ? "✓" : "COPY"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className={styles.field}>
+                  <label>Product Access Token <span className={styles.hint}>(API Key)</span></label>
+                  <div className={styles.valueRow}>
+                    <code style={{color:'var(--primary)'}}>{showToken ? (product.access_token || "N/A") : "bfobs_••••••••••••••••••••"}</code>
+                    <button className={styles.copyBtn} onClick={() => setShowToken(!showToken)}>
+                      {showToken ? "HIDE" : "SHOW"}
+                    </button>
+                    {showToken && (
+                      <button className={styles.copyBtn} onClick={() => copyToClipboard(product.access_token || "", "token")}>
+                        {copyStatus === "token" ? "✓" : "COPY"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
            </div>
         </div>
 
-        <div className={styles.sidebarCards}>
+        <div className={styles.sidebar}>
            <div className={`glass-panel ${styles.miniCard}`}>
-              <h4>Fleet Health</h4>
-              <ul className={styles.statusList}>
-                <li><span>Database Cluster</span> <span className={styles.statusOk}>ONLINE</span></li>
-                <li><span>Storage LFS</span> <span className={styles.statusOk}>ACTIVE</span></li>
-                <li><span>Global Gateway</span> <span className={styles.statusOk}>OPTIMIZED</span></li>
+              <h4>System Pulse</h4>
+              <ul className={styles.pulseList}>
+                <li><span>Database Cluster</span> <span className={styles.pulseOk}>ACTIVE</span></li>
+                <li><span>Object Storage</span> <span className={styles.pulseOk}>LINKED</span></li>
+                <li><span>Traffic Gateway</span> <span className={styles.pulseOk}>STABLE</span></li>
               </ul>
            </div>
 
            <div className={`glass-panel ${styles.miniCard}`}>
-              <h4>Access Protocols</h4>
-              <div className={styles.protocolList}>
-                 <div className={styles.protocol}>
-                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                      <span>Gateway URL</span>
-                      <button className="btn btn-glass" style={{fontSize:'9px',padding:'2px 6px'}} onClick={() => copyToClipboard(gatewayUrl, "gate")}>
-                        {copyStatus === "gate" ? "✓" : "Copy"}
+              <h4>Endpoint Protocols</h4>
+              <div className={styles.protocolStack}>
+                 <div className={styles.protocolItem}>
+                    <div className={styles.protoHeader}>
+                      <span className={styles.protoLabel}>GATEWAY PROTOCOL</span>
+                      <button className={styles.miniCopy} onClick={() => copyToClipboard(gatewayUrl, "gate")}>
+                        {copyStatus === "gate" ? "✓" : "COPY"}
                       </button>
                     </div>
-                    <code style={{color:'#10b981'}}>{gatewayUrl}</code>
+                    <code className={styles.protoValue}>{gatewayUrl}</code>
                  </div>
 
-                 <div className={styles.protocol}>
-                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                      <span>Database Proxy</span>
-                      <button className="btn btn-glass" style={{fontSize:'9px',padding:'2px 6px'}} onClick={() => copyToClipboard(`/db/p/${product.slug}/execute`, "db")}>
-                        {copyStatus === "db" ? "✓" : "Copy"}
+                 <div className={styles.protocolItem}>
+                    <div className={styles.protoHeader}>
+                      <span className={styles.protoLabel}>DATABASE PROXY</span>
+                      <button className={styles.miniCopy} onClick={() => copyToClipboard(`/db/p/${product.slug}/execute`, "db")}>
+                        {copyStatus === "db" ? "✓" : "COPY"}
                       </button>
                     </div>
-                    <code>/db/p/{product.slug}/execute</code>
+                    <code className={styles.protoValue}>/db/p/{product.slug}/execute</code>
                  </div>
 
-                 <div className={styles.protocol}>
-                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                      <span>Storage CDN</span>
-                      <button className="btn btn-glass" style={{fontSize:'9px',padding:'2px 6px'}} onClick={() => copyToClipboard(`/storage/view/${product.slug}/{bucket}/{file}`, "cdn")}>
-                        {copyStatus === "cdn" ? "✓" : "Copy"}
+                 <div className={styles.protocolItem}>
+                    <div className={styles.protoHeader}>
+                      <span className={styles.protoLabel}>STORAGE CDN</span>
+                      <button className={styles.miniCopy} onClick={() => copyToClipboard(`/storage/view/${product.slug}/{bucket}/{file}`, "cdn")}>
+                        {copyStatus === "cdn" ? "✓" : "COPY"}
                       </button>
                     </div>
-                    <code>/storage/view/{product.slug}/&#123;bucket&#125;/&#123;file&#125;</code>
+                    <code className={styles.protoValue}>/storage/view/{product.slug}/...</code>
                  </div>
               </div>
            </div>
 
            <div className={`glass-panel ${styles.miniCard}`}>
-              <h4>Developer Rules</h4>
-              <ul className={styles.statusList}>
-                <li style={{fontSize:'11px',color:'#aaa'}}>⚠️ Never expose access_token in client-side code</li>
-                <li style={{fontSize:'11px',color:'#aaa'}}>📁 Use .sql files for database migrations</li>
-                <li style={{fontSize:'11px',color:'#aaa'}}>🔐 Auth via BandhanNova default auth shards</li>
-                <li style={{fontSize:'11px',color:'#aaa'}}>🔑 Store all secrets in .env files only</li>
+              <h4>Access Guidelines</h4>
+              <ul className={styles.guidelineList}>
+                <li>Never expose access_token on client-side</li>
+                <li>Use .sql migrations for schema changes</li>
+                <li>Verify HMAC signatures for all callbacks</li>
               </ul>
            </div>
         </div>
       </div>
-    </div>
   );
 }

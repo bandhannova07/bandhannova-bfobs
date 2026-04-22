@@ -25,15 +25,16 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isInspectModalOpen, setIsInspectModalOpen] = useState(false);
   const [selectedShard, setSelectedShard] = useState<Shard | null>(null);
   
-  const [formData, setFormData] = useState({
-    name: "",
-    db_url: "",
-    token: ""
-  });
+  const [formData, setFormData] = useState({ name: "", db_url: "", token: "" });
   const [deleteConfirm, setDeleteConfirm] = useState({ masterKey: "", text: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Inspector State
+  const [tables, setTables] = useState<string[]>([]);
+  const [inspecting, setInspecting] = useState(false);
 
   const loadShards = async () => {
     setLoading(true);
@@ -127,6 +128,25 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
     }
   };
 
+  const openInspect = async (db: Shard) => {
+    setSelectedShard(db);
+    setIsInspectModalOpen(true);
+    setInspecting(true);
+    try {
+      const res = await fetchAPI(`/admin/infrastructure/shards/${db.id}/query`, {
+        method: "POST",
+        body: JSON.stringify({ query: "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'" })
+      });
+      if (res.success) {
+        setTables(res.data.map((t: any) => t.name));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setInspecting(false);
+    }
+  };
+
   const openEdit = (db: Shard) => {
     setSelectedShard(db);
     setFormData({ name: db.name, db_url: db.db_url, token: "" });
@@ -168,9 +188,9 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
                <div className={styles.shardFooter}>
                   <div className={styles.shardActions}>
                      <button className="btn btn-glass" style={{fontSize: '11px', padding: '6px 12px'}} onClick={() => openEdit(db)}>Edit</button>
-                     <button className="btn btn-glass" style={{fontSize: '11px', padding: '6px 12px'}} onClick={() => alert("Inspector coming soon...")}>Inspect</button>
+                     <button className="btn btn-glass" style={{fontSize: '11px', padding: '6px 12px'}} onClick={() => openInspect(db)}>Inspect</button>
                   </div>
-                  <button className="btn btn-glass" style={{fontSize: '11px', padding: '6px 12px', color: 'var(--danger)'}} onClick={() => openDelete(db)}>Decommission</button>
+                  <button className="btn btn-glass" style={{fontSize: '11px', padding: '6px 12px', color: 'var(--danger)'}} onClick={() => openDelete(db)}>🗑️</button>
                </div>
             </div>
           ))}
@@ -314,6 +334,42 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
                   </button>
                </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Inspector Modal ────────────────────────── */}
+      {isInspectModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={`glass-panel ${styles.modalContent} ${styles.inspectModal}`}>
+            <div className={styles.modalHeader}>
+               <h3>Shard Explorer</h3>
+               <p>Exploring <strong>{selectedShard?.name}</strong> Tables</p>
+            </div>
+            
+            <div className={styles.inspectorBody}>
+               {inspecting ? (
+                 <div className={styles.loading}>SCANNING TABLES...</div>
+               ) : tables.length === 0 ? (
+                 <div className={styles.emptyState}>No tables found in this shard.</div>
+               ) : (
+                 <div className={styles.tableList}>
+                    {tables.map(table => (
+                      <div key={table} className={styles.tableItem}>
+                         <div className={styles.tableInfo}>
+                            <span className={styles.tableIcon}>📊</span>
+                            <span className={styles.tableName}>{table}</span>
+                         </div>
+                         <button className="btn btn-glass" style={{fontSize: '10px'}} onClick={() => alert("Quick view coming soon...")}>View</button>
+                      </div>
+                    ))}
+                 </div>
+               )}
+            </div>
+
+            <div className={styles.modalActions}>
+               <button className="btn btn-primary" onClick={() => setIsInspectModalOpen(false)}>Close Explorer</button>
+            </div>
           </div>
         </div>
       )}

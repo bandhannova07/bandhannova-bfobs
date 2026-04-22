@@ -58,7 +58,7 @@ export default function ProductDetailDashboard() {
            </div>
            <div>
               <h1 className={styles.title}>{product.name}</h1>
-              <code className={styles.url}>bdn-infra://{product.slug}/gate</code>
+              <code className={styles.url}>bdn-bfobs://{product.slug}/{product.gateway_code || "..."}/gateway/</code>
            </div>
         </div>
         <div className={styles.statusBadge}>

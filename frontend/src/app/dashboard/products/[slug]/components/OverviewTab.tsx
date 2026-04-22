@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import styles from "../page.module.css";
 
 interface Product {
@@ -9,6 +9,8 @@ interface Product {
   description?: string;
   client_id?: string;
   client_secret?: string;
+  access_token?: string;
+  gateway_code?: string;
 }
 
 interface OverviewTabProps {
@@ -16,6 +18,15 @@ interface OverviewTabProps {
 }
 
 export default function OverviewTab({ product }: OverviewTabProps) {
+  const [showToken, setShowToken] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
+
+  const gatewayUrl = `bdn-bfobs://${product.slug}/${product.gateway_code || "provisioning"}/gateway/`;
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
   return (
     <div className={styles.tabContent}>
       <div className={styles.overviewGrid}>
@@ -31,7 +42,22 @@ export default function OverviewTab({ product }: OverviewTabProps) {
               </div>
               <div className={styles.field}>
                 <label>Security Secret</label>
-                <code>{product.client_secret || "••••••••••••••••"}</code>
+                <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                  <code>{showSecret ? (product.client_secret || "N/A") : "••••••••••••••••"}</code>
+                  <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => setShowSecret(!showSecret)}>
+                    {showSecret ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </div>
+              <div className={styles.field}>
+                <label>Product Access Token <span style={{fontSize:'10px',color:'#10b981'}}>(API Key for Developers)</span></label>
+                <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                  <code style={{color:'#10b981'}}>{showToken ? (product.access_token || "N/A") : "bfobs_••••••••••••••••"}</code>
+                  <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => setShowToken(!showToken)}>
+                    {showToken ? "Hide" : "Show"}
+                  </button>
+                  {showToken && <button className="btn btn-glass" style={{fontSize:'10px',padding:'4px 8px'}} onClick={() => copyToClipboard(product.access_token || "")}>Copy</button>}
+                </div>
               </div>
            </div>
         </div>
@@ -47,25 +73,34 @@ export default function OverviewTab({ product }: OverviewTabProps) {
            </div>
 
            <div className={`glass-panel ${styles.miniCard}`}>
-              <h4>Network Protocols</h4>
+              <h4>Access Protocols</h4>
               <div className={styles.protocolList}>
                  <div className={styles.protocol}>
-                    <span>Root Gate</span>
-                    <code>bdn-infra://{product.slug}/gate</code>
+                    <span>Gateway URL</span>
+                    <code style={{color:'#10b981'}}>{gatewayUrl}</code>
                  </div>
                  <div className={styles.protocol}>
-                    <span>SQL Entry</span>
-                    <code>bdn-infra://{product.slug}/sql</code>
+                    <span>Database Proxy</span>
+                    <code>/db/p/{product.slug}/execute</code>
                  </div>
                  <div className={styles.protocol}>
-                    <span>CDN Hook</span>
-                    <code>bdn-infra://{product.slug}/cdn</code>
+                    <span>Storage CDN</span>
+                    <code>/storage/view/{product.slug}/&#123;bucket&#125;/&#123;file&#125;</code>
                  </div>
               </div>
+           </div>
+
+           <div className={`glass-panel ${styles.miniCard}`}>
+              <h4>Developer Rules</h4>
+              <ul className={styles.statusList}>
+                <li style={{fontSize:'11px',color:'#aaa'}}>⚠️ Never expose access_token in client-side code</li>
+                <li style={{fontSize:'11px',color:'#aaa'}}>📁 Use .sql files for database migrations</li>
+                <li style={{fontSize:'11px',color:'#aaa'}}>🔐 Auth via BandhanNova default auth shards</li>
+                <li style={{fontSize:'11px',color:'#aaa'}}>🔑 Store all secrets in .env files only</li>
+              </ul>
            </div>
         </div>
       </div>
     </div>
   );
 }
-

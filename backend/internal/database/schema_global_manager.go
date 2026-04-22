@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS managed_products (
     description TEXT,
     icon TEXT,
     master_schema TEXT,
+    access_token TEXT,
+    gateway_code TEXT,
     status TEXT DEFAULT 'active',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
@@ -151,6 +153,8 @@ func InitGlobalManagerSchema(db *sql.DB) error {
 	_, _ = db.Exec("ALTER TABLE api_cards ADD COLUMN limit_rpmonth INTEGER DEFAULT 0")
 	_, _ = db.Exec("ALTER TABLE api_cards ADD COLUMN limit_concurrent INTEGER DEFAULT 0")
 	_, _ = db.Exec("ALTER TABLE managed_products ADD COLUMN master_schema TEXT")
+	_, _ = db.Exec("ALTER TABLE managed_products ADD COLUMN access_token TEXT")
+	_, _ = db.Exec("ALTER TABLE managed_products ADD COLUMN gateway_code TEXT")
 
 	// Ensure managed_api_keys has new columns
 	_, _ = db.Exec("ALTER TABLE managed_api_keys ADD COLUMN card_id TEXT")

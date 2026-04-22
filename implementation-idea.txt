@@ -1,0 +1,13 @@
+ami dekhlam document ta te onek problems hoyehhe, karon tomar ekhono onek confusion achhe, 
+
+bhai cholo age products/ ta bhalo bhabe bujhe ni ar implement kori:
+1. database system: amader default database er system gulo jemon realtime ar ultra speed e konta kon db r data khunje bar kore temoni ekhaneo ultra speedy kaj hobe, okay? ekhaner databases o serokom kaj korbe default gulo jemon bhabe search, finding, executing er kaj kore, ekhaneo proxy system thakbe, eta already achhe amar mone hoy, routing bhalo bhabe ultra speedy hobe
+2. storage system: ekhane images, videos, files every big and small attachment ekhane upload kora jabe ar ekta url create hobe... ekhane bucket system thakbe, admin specific product er storage e bucket create korte parbe ar sei specific bucket e files upload kora jabe, thik supabase er moto
+3. access system: ekhane amader ekhon url er idea khub complex hoye gechhe ebhabe kaj hobe na, so ami chai ekhane ekta amader specific url hobe: url: "bdn-bfobs://{product name}/{ekta emni code jeta kothao kaje lagbe na, just url er length barabe}/gateway/"  ebar er sathe ekta product creation er time e jei access token ta chhilo seta use hobe, mane eta thik api key r moto kaj korbe, ok
+4. developers rules: 
+i. bandhannova r masterkey, backend url, backend product access url, product access token egulo code er modhe khola rakha jabe na, .nv use korte hobe ar sekhanei egulo rakhte hobe
+ii. developers ra code er help ei sqlite use kore database manage korte parbe na, database ar storage access korar jannya .sql file banate hobe ar SQLite syntax use korte hobe,
+iii. ekhane auth er janya bandhannova r default auth shards gulo use korte hobe, so developer jeno eta bujhe bhalo bhabe signin/signup system ta banai, Okay?
+iv. aro kichhu tumi chaile smart rules baniye dite paro...
+
+important: eta banachhi simplicity + ultra features er janya, Ok mone rakhbe ar bhalo bhabe development korbe

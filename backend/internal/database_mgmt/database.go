@@ -43,6 +43,8 @@ type ProductResponse struct {
 	Icon         string `json:"icon"`
 	ClientID     string `json:"client_id,omitempty"`
 	ClientSecret string `json:"client_secret,omitempty"`
+	AccessToken  string `json:"access_token,omitempty"`
+	GatewayCode  string `json:"gateway_code,omitempty"`
 	Status       string `json:"status"`
 	CreatedAt    int64  `json:"created_at"`
 	UpdatedAt    int64  `json:"updated_at"`
@@ -497,15 +499,15 @@ func GetProductDetails(c *fiber.Ctx) error {
 			defer wg.Done()
 			
 			var localP ProductResponse
-			var localAppType, localAppURL, localIcon, localClientID, localClientSecret sql.NullString
+			var localAppType, localAppURL, localIcon, localClientID, localClientSecret, localAccessToken, localGatewayCode sql.NullString
 			
 			err := db.QueryRow(`
-				SELECT p.id, p.name, p.slug, p.app_type, p.app_url, p.description, p.icon, p.status, p.created_at, p.updated_at, c.client_id, c.client_secret
+				SELECT p.id, p.name, p.slug, p.app_type, p.app_url, p.description, p.icon, p.access_token, p.gateway_code, p.status, p.created_at, p.updated_at, c.client_id, c.client_secret
 				FROM managed_products p
 				LEFT JOIN oauth_clients c ON p.id = c.product_id
 				WHERE p.slug = ?`,
 				slug,
-			).Scan(&localP.ID, &localP.Name, &localP.Slug, &localAppType, &localAppURL, &localP.Description, &localIcon, &localP.Status, &localP.CreatedAt, &localP.UpdatedAt, &localClientID, &localClientSecret)
+			).Scan(&localP.ID, &localP.Name, &localP.Slug, &localAppType, &localAppURL, &localP.Description, &localIcon, &localAccessToken, &localGatewayCode, &localP.Status, &localP.CreatedAt, &localP.UpdatedAt, &localClientID, &localClientSecret)
 
 			if err == nil {
 				mu.Lock()
@@ -516,6 +518,8 @@ func GetProductDetails(c *fiber.Ctx) error {
 					icon = localIcon
 					clientID = localClientID
 					clientSecret = localClientSecret
+					if localAccessToken.Valid { p.AccessToken = localAccessToken.String }
+					if localGatewayCode.Valid { p.GatewayCode = localGatewayCode.String }
 					found = true
 				}
 				mu.Unlock()
@@ -603,14 +607,20 @@ func AddProduct(c *fiber.Ctx) error {
 	clientID := "bn_" + strings.ReplaceAll(uuid.New().String(), "-", "")[:16]
 	clientSecret := base64.StdEncoding.EncodeToString([]byte(uuid.New().String() + uuid.New().String()))[:48]
 
+	// Auto-generate Access Token (API Key for product-level auth)
+	accessToken := "bfobs_" + strings.ReplaceAll(uuid.New().String(), "-", "") + strings.ReplaceAll(uuid.New().String(), "-", "")[:12]
+
+	// Auto-generate Gateway Code (random URL-safe code for bdn-bfobs:// URL)
+	gatewayCode := strings.ReplaceAll(uuid.New().String(), "-", "")[:12]
+
 	tx, err := targetGDB.Begin()
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Transaction failed"})
 	}
 
 	_, err = tx.Exec(
-		"INSERT INTO managed_products (id, name, slug, app_type, app_url, description, icon, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
-		id, req.Name, slug, req.AppType, req.AppURL, req.Description, req.Icon, now, now,
+		"INSERT INTO managed_products (id, name, slug, app_type, app_url, description, icon, access_token, gateway_code, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+		id, req.Name, slug, req.AppType, req.AppURL, req.Description, req.Icon, accessToken, gatewayCode, now, now,
 	)
 	if err != nil {
 		tx.Rollback()
@@ -633,7 +643,15 @@ func AddProduct(c *fiber.Ctx) error {
 	
 	logAuditShard(targetGDB, "ADD_PRODUCT", req.Name, ip, fmt.Sprintf("Added product: %s (Client: %s)", req.Name, clientID))
 
-	return c.JSON(fiber.Map{"success": true, "message": "Product added with OAuth credentials", "id": id, "client_id": clientID, "client_secret": clientSecret})
+	return c.JSON(fiber.Map{
+		"success":       true,
+		"message":       "Product added with OAuth credentials",
+		"id":            id,
+		"client_id":     clientID,
+		"client_secret": clientSecret,
+		"access_token":  accessToken,
+		"gateway_url":   fmt.Sprintf("bdn-bfobs://%s/%s/gateway/", slug, gatewayCode),
+	})
 }
 
 func UpdateProduct(c *fiber.Ctx) error {

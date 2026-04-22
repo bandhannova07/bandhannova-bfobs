@@ -126,6 +126,57 @@ func AdminAuthRequired() fiber.Handler {
 func GenerateAdminToken(masterKey string) string { return GenerateSessionToken("admin", masterKey) }
 func ValidateAdminToken(token string, secret string) bool { _, ok := ValidateSessionToken(token, secret); return ok }
 
+// ═══════════════════════════════════════════════
+//  Rate Limiter & IP Helpers
+// ═══════════════════════════════════════════════
+
+func getClientIP(c *fiber.Ctx) string {
+	if ip := c.Get("X-Forwarded-For"); ip != "" {
+		return strings.Split(ip, ",")[0]
+	}
+	if ip := c.Get("X-Real-IP"); ip != "" {
+		return ip
+	}
+	return c.IP()
+}
+
+func checkRateLimit(key string, limit int) bool {
+	count, err := cache.Incr("ratelimit:"+key, time.Duration(RateLimitWindowSeconds)*time.Second)
+	if err != nil {
+		return true 
+	}
+	return int(count) <= limit
+}
+
+func recordLoginFailure(ip string) (remaining int, banned bool) {
+	key := "failcount:" + ip
+	count, _ := cache.Incr(key, 24*time.Hour)
+	if int(count) >= AutoBanThreshold {
+		_ = cache.Set("ban:"+ip, time.Now().Add(AutoBanDuration).Unix(), AutoBanDuration)
+		return 0, true
+	}
+	return AutoBanThreshold - int(count), false
+}
+
+func resetLoginFailures(ip string) {
+	_ = cache.Del("failcount:" + ip)
+	_ = cache.Del("ban:" + ip)
+}
+
+func getBanRemaining(ip string) int64 {
+	var banUntil int64
+	exists, _ := cache.Get("ban:"+ip, &banUntil)
+	if !exists {
+		return 0
+	}
+	remaining := banUntil - time.Now().Unix()
+	if remaining < 0 {
+		_ = cache.Del("ban:" + ip)
+		return 0
+	}
+	return remaining
+}
+
 // AdminLoginRateLimiter applies strict rate limiting to login endpoint
 func AdminLoginRateLimiter() fiber.Handler {
 	return func(c *fiber.Ctx) error {

@@ -4,124 +4,107 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import styles from "./docs.module.css";
 
-const DOCS_MARKDOWN = `# ⚡ BandhanNova Infrastructure: Developer Orchestration Guide
-> **Internal Technical Document - Version 1.0**
-> *For use by BandhanNova Ecosystem Developers*
-
-## 1. Overview
-The **BandhanNova API Hunter (BFOBS)** is the centralized brain for managing high-performance, sharded database infrastructure across all BandhanNova products. 
-
-Instead of a single monolithic database, every product (Blogs, Market, AI, etc.) gets its own **Dedicated Turso Shards**, all orchestrated by a global master layer. This ensures infinite scalability, edge performance, and total data isolation.
+const DOCS_MARKDOWN = `# ⚡ BandhanNova Product Portal: Developer Integration Guide
+> **Official Technical Documentation for Ecosystem Developers**
+> *Maintain secure access to your product's infrastructure shards and cloud assets.*
 
 ---
 
-## 2. Core Architecture
-The system operates on a **Triple-Layer Infrastructure**:
+## 1. Accessing Your Product Portal
+Every product within the BandhanNova ecosystem is assigned a dedicated **Infrastructure Fleet**. You can access your management console using your **Product Credentials**:
 
-1.  **Global Manager (Global Shards):** Stores metadata about products, shard locations, and encrypted access tokens.
-2.  **Core Master (Infrastructure Shards):** Manages the physical Turso databases and their health.
-3.  **Product Shards (Dedicated Shards):** The actual Turso databases where product data resides.
-
----
-
-## 3. Step-by-Step: Registering a New Product Backend
-
-### Phase 1: Product Registration
-1.  Navigate to **Admin Dashboard > Products**.
-2.  Click **+ New Infrastructure**.
-3.  Enter the **Product Name** and **Slug** (e.g., \`bandhannova-blogs\`).
-4.  The system generates **OAuth 2.0 Credentials** and a **Hugging Face Storage Bucket** automatically.
-
-### Phase 2: Linking Database Shards
-1.  Go to your product's **Database View**.
-2.  Click **+ Add Dedicated Shard**.
-3.  Provide the **Turso Database URL** and **Access Token**.
-4.  The system securely links this shard to your \`product_id\`.
+- **Login URL:** \`/developer/login\`
+- **Infrastructure ID:** Your unique product identifier (Public).
+- **Security Secret:** Your private HMAC signing key (Keep this secret!).
 
 ---
 
-## 4. Using the Shard Studio
-- **Inspector:** Click **"Inspect"** on any shard card to open the **Shard Studio**.
-- **Table Explorer:** Browse tables and schemas in the sidebar.
-- **Data Grid:** View and edit rows in a spreadsheet-like interface.
-- **SQL Forge:** Run bulk migrations across all shards simultaneously.
+## 2. Infrastructure Protocol (\`bdn-bfobs://\`)
+We use a custom orchestration protocol to manage distributed shards. This allows your backend to remain agnostic of the underlying Turso database location.
+
+**Standard Pattern:**
+\`bdn-bfobs://{product_slug}/{gateway_code}/gateway/\`
+
+- **Usage:** This URL is used by the BandhanNova Global Router to resolve your active shards in real-time. 
+- **Rotation:** If a database shard is migrated, the gateway code remains the same, ensuring **zero downtime**.
 
 ---
 
-## 5. Developer API Integration (Proxying)
-Use the **BFOBS Proxy Gateway** to execute queries securely.
+## 3. Database Proxy Gateway
+Never connect directly to your Turso shards from your client-side apps. Always use the **BFOBS Proxy**.
 
-**Endpoint:** \`POST /db/p/:product_slug/execute\`
-**Headers:** 
-- \`Authorization: Bearer <Product_OAuth_Token>\`
-- \`Content-Type: application/json\`
-
-**Body:**
-\`\`\`json
-{
-  "query": "SELECT * FROM users WHERE email = ?",
-  "params": ["dev@bandhannova.in"]
-}
-\`\`\`
-
----
-
-## 6. Security Protocol
-- **Master Key:** Required for all destructive actions.
-- **Encryption:** All tokens are stored using **AES-256-GCM**.
-- **Confirmation:** Requires typing **"DELETE"** for decommissioning shards or products.
-
----
-
-## 5. Integration Guide: How to Use in Your Project
-To integrate your project with the BandhanNova ecosystem, follow this standardized workflow:
-
-### A. Authentication Flow
-Every project must authenticate using its **Product Credentials**. 
-1.  **Request Token:** Exchange your \`Client ID\` and \`Client Secret\` for a session token.
-2.  **Store Token:** Keep the token in your backend environment variables (e.g., \`BF_TOKEN\`).
-
-### B. Accessing Your Database
-Use the **Global Proxy Gateway** instead of connecting directly to Turso. This allows BandhanNova to rotate shards without breaking your app.
-
-**Standard URL Pattern:**
-- **Proxy Gateway:** \`https://api.bandhannova.in/api/db/p/:product_slug/execute\`
-- **Asset Storage:** \`https://assets.bandhannova.in/:product_slug/:filename\`
-
----
-
-## 6. Security & Best Practices
-Security is the backbone of the BandhanNova ecosystem. Follow these strict rules:
-
-1.  **Never Expose Master Key:** The \`BANDHANNOVA_MASTER_KEY\` is only for administrative tasks. Never use it in client-side code or product backends.
-2.  **Use Product Tokens:** Always use the OAuth token generated for your specific product.
-3.  **Encrypted Transport:** All API calls MUST be made over HTTPS.
-4.  **Least Privilege:** Ensure your queries only access necessary tables. Use the **Shard Studio** to test queries before deploying to production.
-
----
-
-## 7. Developer API Reference
-
-### Execute SQL (Fleet Orchestration)
-Run SQL queries across your product's dedicated shard fleet.
-
+### Execute SQL Queries
 **Endpoint:** \`POST /api/db/p/:product_slug/execute\`
 
-| Header | Value |
-| :--- | :--- |
-| \`Authorization\` | \`Bearer <Your_Product_Token>\` |
-| \`Content-Type\` | \`application/json\` |
+**Request Headers:**
+| Header | Value | Description |
+| :--- | :--- | :--- |
+| \`Authorization\` | \`Bearer <Access_Token>\` | Generated from your Security Secret. |
+| \`Content-Type\` | \`application/json\` | Required. |
 
 **Request Body:**
 \`\`\`json
 {
-  "query": "INSERT INTO users (name, email) VALUES (?, ?)",
-  "params": ["Bandhan Developer", "dev@bandhannova.in"]
+  "query": "SELECT * FROM users WHERE status = ?",
+  "params": ["active"]
 }
 \`\`\`
 
 ---
-**BandhanNova Infrastructure: Built for the Edge. Engineered for Scale.**`;
+
+## 4. Storage & CDN (Hugging Face LFS)
+Your product is automatically provisioned with an LFS-backed storage bucket.
+
+### View/Download Files
+**URL Pattern:** \`/api/storage/view/:product_slug/:bucket_name/:file_path\`
+
+### Uploading Assets
+Use the **Storage View** in your Product Portal to manage buckets. Developers can upload assets via the portal or use the multi-tenant upload endpoint:
+**Endpoint:** \`POST /api/storage/upload/:product_slug/:bucket_name\`
+
+---
+
+## 5. The Developer Tools (Portal Tour)
+Your Product Portal contains four critical modules:
+
+### A. Overview 📊
+Your control center. View your **Gateway Credentials**, **Access Tokens**, and **Health Pulse**. Copy your integration keys directly from here.
+
+### B. Databases 🗄️
+Manage your dedicated Turso shards. You can see which shards are linked to your project and monitor their connection status.
+
+### C. Storage ☁️
+Manage your Hugging Face LFS buckets. Create folders, upload assets, and get public CDN links for your frontend.
+
+### D. SQL Forge ⚡
+A safe environment to run database migrations, test complex queries, and manage your schema across the entire fleet.
+
+---
+
+## 6. Integration Example (JavaScript)
+\`\`\`javascript
+const executeQuery = async (sql, params = []) => {
+  const response = await fetch("https://api-hunter.bandhannova.in/api/db/p/your-product-slug/execute", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer YOUR_ACCESS_TOKEN",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ query: sql, params })
+  });
+  return await response.json();
+};
+\`\`\`
+
+---
+
+## 7. Security Best Practices
+1. **Token Rotation:** Re-generate your **Access Token** if your Security Secret is compromised.
+2. **Backend Only:** Always call the Proxy Gateway from your backend environment.
+3. **Validation:** Always validate user input before passing it to the SQL Forge or Proxy Gateway.
+
+---
+**BandhanNova Infrastructure: Sharded for Performance. Secured for the Future.**`;
 
 export default function DocsPage() {
   const [copied, setCopied] = useState(false);

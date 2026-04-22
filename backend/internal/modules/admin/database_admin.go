@@ -167,6 +167,7 @@ func BulkExecuteSQLHandler(c *fiber.Ctx) error {
 	ip, _ := c.Locals("admin_ip").(string)
 	var req struct {
 		ProductID    string   `json:"product_id"`
+		ProductSlug  string   `json:"product_slug"`
 		ShardSlugs   []string `json:"shard_slugs"`
 		SQL          string   `json:"sql"`
 		SaveToMaster bool     `json:"save_to_master"`
@@ -176,14 +177,51 @@ func BulkExecuteSQLHandler(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
 	}
 
+	// 0. Resolve ShardSlugs if not provided but product_slug is
+	if len(req.ShardSlugs) == 0 && (req.ProductSlug != "" || req.ProductID != "") {
+		// Find the product and its shards
+		var pID string = req.ProductID
+		if pID == "" {
+			// Find product ID by slug across global shards
+			for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+				err := gDB.QueryRow("SELECT id FROM managed_products WHERE slug = ?", req.ProductSlug).Scan(&pID)
+				if err == nil {
+					break
+				}
+			}
+		}
+
+		if pID != "" {
+			// Fetch all active shards for this product
+			for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+				rows, err := gDB.Query("SELECT slug FROM managed_databases WHERE product_id = ? AND status = 'active'", pID)
+				if err == nil {
+					for rows.Next() {
+						var sSlug string
+						if err := rows.Scan(&sSlug); err == nil {
+							req.ShardSlugs = append(req.ShardSlugs, sSlug)
+						}
+					}
+					rows.Close()
+				}
+			}
+		}
+	}
+
+	if len(req.ShardSlugs) == 0 {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "No active shards found for this product fleet"})
+	}
+
 	// 1. Save to Master Schema if requested
 	if req.SaveToMaster && req.ProductID != "" {
-		_, err := database.Router.GetGlobalManagerDB().Exec(
-			"UPDATE managed_products SET master_schema = ?, updated_at = ? WHERE id = ?",
-			req.SQL, time.Now().Unix(), req.ProductID,
-		)
-		if err != nil {
-			log.Printf("Failed to update master schema: %v", err)
+		for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+			_, err := gDB.Exec(
+				"UPDATE managed_products SET master_schema = ?, updated_at = ? WHERE id = ?",
+				req.SQL, time.Now().Unix(), req.ProductID,
+			)
+			if err == nil {
+				break
+			}
 		}
 	}
 
@@ -209,11 +247,12 @@ func BulkExecuteSQLHandler(c *fiber.Ctx) error {
 	}
 	wg.Wait()
 
-	LogAudit("BULK_SQL_EXEC", req.ProductID, ip, fmt.Sprintf("Executed SQL on %d shards", len(req.ShardSlugs)))
+	LogAudit("BULK_SQL_EXEC", req.ProductSlug, ip, fmt.Sprintf("Executed SQL on %d shards", len(req.ShardSlugs)))
 
 	return c.JSON(fiber.Map{
 		"success": true,
 		"results": results,
+		"shards_executed": len(req.ShardSlugs),
 	})
 }
 

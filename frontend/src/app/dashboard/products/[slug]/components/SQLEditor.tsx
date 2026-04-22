@@ -65,6 +65,7 @@ export default function SQLEditor({ product }: SQLEditorProps) {
             <button className={styles.clearBtn} onClick={() => setResult(null)}>PURGE</button>
           </div>
           <pre className={styles.pre}>
+            {result.shards_executed && <div style={{color:'#10b981', marginBottom:'10px'}}>🚀 Orchestrated execution successful across {result.shards_executed} shards.</div>}
             {JSON.stringify(result, null, 2)}
           </pre>
         </div>

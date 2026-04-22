@@ -22,7 +22,7 @@ export default function OverviewTab({ product }: OverviewTabProps) {
   const [showSecret, setShowSecret] = useState(false);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
-  const gatewayUrl = `bdn-bfobs://${product.slug}/${product.gateway_code || "provisioning"}/gateway/`;
+  const gatewayUrl = `bdn-bfobs://${product.slug}/${product.gateway_code || "provisioning"}/gateway`;
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);

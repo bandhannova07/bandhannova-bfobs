@@ -23,7 +23,7 @@ Every product within the BandhanNova ecosystem is assigned a dedicated **Infrast
 We use a custom orchestration protocol to manage distributed shards. This allows your backend to remain agnostic of the underlying Turso database location.
 
 **Standard Pattern (Example):**
-\`bdn-bfobs://{product_slug}/{gateway_code}/gateway/\`
+\`bdn-bfobs://{product_slug}/{gateway_code}/gateway\`
 
 - **Usage:** This URL is used by the BandhanNova Global Router to resolve your active shards in real-time. 
 - **Rotation:** If a database shard is migrated, the gateway code remains the same, ensuring **zero downtime**.

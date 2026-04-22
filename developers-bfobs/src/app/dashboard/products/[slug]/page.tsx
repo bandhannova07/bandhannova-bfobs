@@ -66,10 +66,6 @@ export default function ProductDetailDashboard() {
       <div className={styles.header}>
         <div className={styles.headerLeft}>
           <div className={styles.breadcrumbs}>
-            <span onClick={() => router.push("/dashboard")}>Dashboard</span>
-            <span className={styles.separator}>/</span>
-            <span onClick={() => router.push("/dashboard/products")}>Infrastructure</span>
-            <span className={styles.separator}>/</span>
             <span className={styles.current}>{product.name}</span>
           </div>
           <div className={styles.titleArea}>
@@ -87,14 +83,13 @@ export default function ProductDetailDashboard() {
                       LIVE
                    </div>
                  </div>
-                 <code className={styles.url}>bn-bfobs://{product.slug}/{product.gateway_code || "..."}/gateway/</code>
+                 <code className={styles.url}>bdn-bfobs://{product.slug}/{product.gateway_code || "..."}/gateway</code>
               </div>
           </div>
         </div>
 
         <div className={styles.headerActions}>
-           <button className="btn btn-glass" onClick={() => window.open("/dashboard/docs", "_blank")}>📖 DOCS</button>
-           <button className="btn btn-glass">📊 MONITOR</button>
+           <button className="btn btn-glass" onClick={() => window.open("/docs", "_blank")}>📖 DOCS</button>
            {userRole === "developer" ? (
              <button className="btn btn-primary" onClick={handleLogout} style={{background:'var(--danger)'}}>EXIT PORTAL</button>
            ) : (

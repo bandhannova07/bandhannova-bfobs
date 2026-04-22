@@ -38,12 +38,15 @@ export default function SQLEditor({ product }: SQLEditorProps) {
     <div className={styles.tabContent}>
       <div className={styles.editorHeader}>
         <div className={styles.headerTitle}>
-          <h3>SQL Forge Console</h3>
-          <p>Sharded execution across <strong>{product.slug}</strong> fleet.</p>
+          <div style={{display:'flex', alignItems:'center', gap:'12px', marginBottom:'8px'}}>
+             <div style={{fontSize:'24px', background:'rgba(0,255,136,0.1)', padding:'10px', borderRadius:'12px', border:'1px solid rgba(0,255,136,0.2)'}}>⚡</div>
+             <h3 style={{fontSize:'22px', fontWeight:800}}>SQL Forge Console</h3>
+          </div>
+          <p style={{color:'var(--text-secondary)', fontSize:'14px'}}>Sharded orchestration across <strong>{product.slug}</strong> infrastructure fleet.</p>
         </div>
-        <div style={{ marginTop: "5px", marginBottom: "10px" }}>
-          <button className="btn btn-primary" onClick={handleExecute} disabled={executing}>
-            {executing ? "Processing..." : "Execute Pulse ⚡"}
+        <div style={{ marginTop: "10px" }}>
+          <button className="btn btn-primary" onClick={handleExecute} disabled={executing} style={{background:'linear-gradient(135deg, #00ff88 0%, #00a3ff 100%)', border:'none', padding:'12px 24px'}}>
+            {executing ? "ORCHESTRATING..." : "EXECUTE PULSE ⚡"}
           </button>
         </div>
       </div>

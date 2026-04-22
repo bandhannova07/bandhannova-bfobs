@@ -87,14 +87,13 @@ export default function ProductDetailDashboard() {
                       LIVE
                    </div>
                  </div>
-                 <code className={styles.url}>bn-bfobs://{product.slug}/{product.gateway_code || "..."}/gateway/</code>
+                 <code className={styles.url}>bdn-bfobs://{product.slug}/{product.gateway_code || "..."}/gateway</code>
               </div>
           </div>
         </div>
 
         <div className={styles.headerActions}>
            <button className="btn btn-glass" onClick={() => window.open("/dashboard/docs", "_blank")}>📖 DOCS</button>
-           <button className="btn btn-glass">📊 MONITOR</button>
            {userRole === "developer" ? (
              <button className="btn btn-primary" onClick={handleLogout} style={{background:'var(--danger)'}}>EXIT PORTAL</button>
            ) : (

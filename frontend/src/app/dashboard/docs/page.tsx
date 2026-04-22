@@ -78,15 +78,15 @@ To integrate your project with the BandhanNova ecosystem, follow this standardiz
 
 ### A. Authentication Flow
 Every project must authenticate using its **Product Credentials**. 
-1.  **Request Token:** Exchange your `Client ID` and `Client Secret` for a session token.
-2.  **Store Token:** Keep the token in your backend environment variables (e.g., `BF_TOKEN`).
+1.  **Request Token:** Exchange your \`Client ID\` and \`Client Secret\` for a session token.
+2.  **Store Token:** Keep the token in your backend environment variables (e.g., \`BF_TOKEN\`).
 
 ### B. Accessing Your Database
 Use the **Global Proxy Gateway** instead of connecting directly to Turso. This allows BandhanNova to rotate shards without breaking your app.
 
 **Standard URL Pattern:**
-- **Proxy Gateway:** `https://api.bandhannova.in/api/db/p/:product_slug/execute`
-- **Asset Storage:** `https://assets.bandhannova.in/:product_slug/:filename`
+- **Proxy Gateway:** \`https://api.bandhannova.in/api/db/p/:product_slug/execute\`
+- **Asset Storage:** \`https://assets.bandhannova.in/:product_slug/:filename\`
 
 ---
 

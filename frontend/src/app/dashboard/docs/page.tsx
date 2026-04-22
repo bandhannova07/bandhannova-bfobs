@@ -1,5 +1,7 @@
 "use client";
 import React, { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import styles from "./docs.module.css";
 
 const DOCS_MARKDOWN = `# ⚡ BandhanNova Infrastructure: Developer Orchestration Guide
@@ -94,9 +96,11 @@ export default function DocsPage() {
        </div>
 
        <div className={`glass-panel ${styles.docsContent}`}>
-          <pre className={styles.markdownPre}>
-             {DOCS_MARKDOWN}
-          </pre>
+          <div className={styles.markdownWrapper}>
+             <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {DOCS_MARKDOWN}
+             </ReactMarkdown>
+          </div>
        </div>
     </div>
   );

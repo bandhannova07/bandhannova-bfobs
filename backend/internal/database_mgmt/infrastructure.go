@@ -152,7 +152,7 @@ func QueryInfrastructureShard(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid query"})
 	}
 
-	// Find the shard in registry to get URL/Token
+	// 1. Try to find in Core Master (Infrastructure Shards)
 	var shard struct {
 		URL   string `db:"db_url"`
 		Token string `db:"encrypted_token"`
@@ -160,8 +160,22 @@ func QueryInfrastructureShard(c *fiber.Ctx) error {
 	err := database.Router.GetCoreMasterDB().QueryRow(
 		"SELECT db_url, encrypted_token FROM infrastructure_shards WHERE id = ?", id,
 	).Scan(&shard.URL, &shard.Token)
+
+	// 2. If not found, search in all Global Manager shards (Product Shards)
 	if err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Shard not found"})
+		found := false
+		for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+			err := gDB.QueryRow(
+				"SELECT db_url, encrypted_token FROM managed_databases WHERE id = ?", id,
+			).Scan(&shard.URL, &shard.Token)
+			if err == nil {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return c.Status(404).JSON(fiber.Map{"error": true, "message": "Shard not found in fleet registry"})
+		}
 	}
 
 	decryptedToken, err := security.Decrypt(shard.Token, config.AppConfig.BandhanNovaMasterKey)

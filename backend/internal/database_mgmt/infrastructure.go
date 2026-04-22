@@ -213,12 +213,21 @@ func ClearInfrastructureShard(c *fiber.Ctx) error {
 	var shard struct {
 		URL   string `db:"db_url"`
 		Token string `db:"encrypted_token"`
+		Type  string `db:"type"`
 	}
 	err := database.Router.GetCoreMasterDB().QueryRow(
-		"SELECT db_url, encrypted_token FROM infrastructure_shards WHERE id = ?", id,
-	).Scan(&shard.URL, &shard.Token)
+		"SELECT db_url, encrypted_token, type FROM infrastructure_shards WHERE id = ?", id,
+	).Scan(&shard.URL, &shard.Token, &shard.Type)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Shard not found"})
+	}
+
+	// Protect critical infrastructure
+	if shard.Type == "auth" || shard.Type == "analytics" || shard.Type == "global_manager" {
+		return c.Status(403).JSON(fiber.Map{
+			"error": true,
+			"message": "Critical Infrastructure Protection: Cannot wipe " + shard.Type + " nodes. This action is restricted to system-level maintenance.",
+		})
 	}
 
 	decryptedToken, err := security.Decrypt(shard.Token, config.AppConfig.BandhanNovaMasterKey)
@@ -309,7 +318,19 @@ func RemoveInfrastructureShard(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "ID is required"})
 	}
 
-	_, err := database.Router.GetCoreMasterDB().Exec("DELETE FROM infrastructure_shards WHERE id = ?", id)
+	// Protect critical infrastructure
+	var sType string
+	err := database.Router.GetCoreMasterDB().QueryRow("SELECT type FROM infrastructure_shards WHERE id = ?", id).Scan(&sType)
+	if err == nil {
+		if sType == "auth" || sType == "analytics" || sType == "global_manager" {
+			return c.Status(403).JSON(fiber.Map{
+				"error": true,
+				"message": "Critical Infrastructure Protection: Cannot remove " + sType + " nodes via this endpoint.",
+			})
+		}
+	}
+
+	_, err = database.Router.GetCoreMasterDB().Exec("DELETE FROM infrastructure_shards WHERE id = ?", id)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to remove shard"})
 	}

@@ -145,7 +145,7 @@ func ReloadManagedAPIKeys() error {
 	wg.Wait()
 
 	for provider, keys := range providerKeys {
-		config.UpdateKeys(provider, keys)
+		config.UpdateFleetKeys(provider, keys)
 	}
 
 	log.Printf("🛡️  Managed API keys reloaded from all global shards")
@@ -309,18 +309,7 @@ func AddDatabase(c *fiber.Ctx) error {
 	// Hot Reload
 	go ReloadManagedDatabases()
 
-	// 6. AUTO-SYNC: Run Master Schema if exists for the product
-	if req.ProductID != "" {
-		var schema sql.NullString
-		database.Router.GetGlobalManagerDB().QueryRow("SELECT master_schema FROM managed_products WHERE id = ?", req.ProductID).Scan(&schema)
-		if schema.Valid && schema.String != "" {
-			// Small delay to ensure reload finished
-			time.Sleep(1 * time.Second)
-			ExecuteSQL(slug, schema.String)
-		}
-	}
-
-	return c.JSON(fiber.Map{"success": true, "message": "Database added and synchronized", "slug": slug})
+	return c.JSON(fiber.Map{"success": true, "message": "Database added successfully", "slug": slug})
 }
 
 // HarmonizeNames renames all existing database records to the indexed format
@@ -497,21 +486,43 @@ func GetProductDetails(c *fiber.Ctx) error {
 	var appType, appURL, icon, clientID, clientSecret sql.NullString
 	found := false
 
-	// Search all Global Manager shards
-	for _, db := range database.Router.GetAllGlobalManagerDBs() {
-		err := db.QueryRow(`
-			SELECT p.id, p.name, p.slug, p.app_type, p.app_url, p.description, p.icon, p.status, p.created_at, p.updated_at, c.client_id, c.client_secret
-			FROM managed_products p
-			LEFT JOIN oauth_clients c ON p.id = c.product_id
-			WHERE p.slug = ?`,
-			slug,
-		).Scan(&p.ID, &p.Name, &p.Slug, &appType, &appURL, &p.Description, &icon, &p.Status, &p.CreatedAt, &p.UpdatedAt, &clientID, &clientSecret)
+	// Search all Global Manager shards in parallel
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	found = false
 
-		if err == nil {
-			found = true
-			break
-		}
+	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+		wg.Add(1)
+		go func(db *sql.DB) {
+			defer wg.Done()
+			
+			var localP ProductResponse
+			var localAppType, localAppURL, localIcon, localClientID, localClientSecret sql.NullString
+			
+			err := db.QueryRow(`
+				SELECT p.id, p.name, p.slug, p.app_type, p.app_url, p.description, p.icon, p.status, p.created_at, p.updated_at, c.client_id, c.client_secret
+				FROM managed_products p
+				LEFT JOIN oauth_clients c ON p.id = c.product_id
+				WHERE p.slug = ?`,
+				slug,
+			).Scan(&localP.ID, &localP.Name, &localP.Slug, &localAppType, &localAppURL, &localP.Description, &localIcon, &localP.Status, &localP.CreatedAt, &localP.UpdatedAt, &localClientID, &localClientSecret)
+
+			if err == nil {
+				mu.Lock()
+				if !found {
+					p = localP
+					appType = localAppType
+					appURL = localAppURL
+					icon = localIcon
+					clientID = localClientID
+					clientSecret = localClientSecret
+					found = true
+				}
+				mu.Unlock()
+			}
+		}(gDB)
 	}
+	wg.Wait()
 
 	if !found {
 		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Infrastructure not found on any shard"})

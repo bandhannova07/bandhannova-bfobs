@@ -204,8 +204,10 @@ func decryptInternal(encrypted, master string) []string {
 }
 
 
-// UpdateKeys updates the in-memory keys from the database records
-func UpdateKeys(provider string, keys []string) {
+
+
+// UpdateFleetKeys updates the in-memory keys from the database records
+func UpdateFleetKeys(provider string, keys []string) {
 	switch strings.ToLower(provider) {
 	case "openrouter":
 		AppConfig.OpenRouterKeys = keys

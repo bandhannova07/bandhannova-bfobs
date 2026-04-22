@@ -747,3 +747,99 @@
   justify-content: flex-end;
 }
 
+/* Premium Shard Cards - Optimized with Global Design */
+.dbGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 24px;
+  margin-top: 20px;
+}
+
+.shardCard {
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+}
+
+.shardHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.shardIcon {
+  font-size: 24px;
+  width: 48px; height: 48px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 12px;
+}
+
+.shardMeta h4 {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.shardStatusLabel {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--primary);
+  opacity: 0.8;
+}
+
+.shardURL {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 24px;
+  word-break: break-all;
+  border: 1px solid var(--glass-border);
+}
+
+.shardFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+}
+
+.shardStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--success);
+}
+
+.statusDot {
+  width: 8px; height: 8px;
+  background: var(--success);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--success);
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(12px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 80px;
+  border: 1px dashed var(--glass-border);
+  border-radius: 32px;
+  color: var(--text-muted);
+}

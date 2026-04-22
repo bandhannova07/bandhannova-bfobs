@@ -18,6 +18,7 @@ import (
 	"github.com/bandhannova/api-hunter/internal/security"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"sync"
 )
 
 // ═══════════════════════════════════════════════
@@ -589,16 +590,55 @@ func GetAdminStatus(c *fiber.Ctx) error {
 	}
 	if providers == nil { providers = []fiber.Map{} }
 
-	// ─── Shard Health ────────────────────────────────────────────────────────
-	shards := []ShardStatus{}
-	shards = append(shards, getShardMetrics(database.Router.GetAuthDB(), "Auth Shard", "auth", []string{"users", "sessions"}))
-	shards = append(shards, getShardMetrics(database.Router.GetAnalyticsDB(), "Analytics Shard", "analytics", []string{"request_logs", "inbound_emails", "outbound_emails"}))
-	shards = append(shards, getShardMetrics(db, "Global Shard", "global", []string{"managed_api_keys", "api_cards", "api_usage_logs", "admin_audit_log"}))
-	for i := 0; i < database.Router.GetShardCount(); i++ {
-		shardName := fmt.Sprintf("User Shard %d", i)
-		sdb := database.Router.GetUserDB(fmt.Sprintf("internal-status-check-%d", i))
-		shards = append(shards, getShardMetrics(sdb, shardName, "user", []string{"user_data", "chat_history", "saved_items"}))
+	// ─── Shard Health (Parallelized for Speed) ──────────────────────────────────
+	var shardList []ShardStatus
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	// Core Shards tasks
+	coreShards := []struct {
+		db     *sql.DB
+		name   string
+		sType  string
+		tables []string
+	}{
+		{database.Router.GetAuthDB(), "Auth Shard", "auth", []string{"users", "sessions"}},
+		{database.Router.GetAnalyticsDB(), "Analytics Shard", "analytics", []string{"request_logs", "inbound_emails", "outbound_emails"}},
+		{db, "Global Shard", "global", []string{"managed_api_keys", "api_cards", "api_usage_logs", "admin_audit_log"}},
 	}
+
+	for _, s := range coreShards {
+		wg.Add(1)
+		go func(sData struct {
+			db     *sql.DB
+			name   string
+			sType  string
+			tables []string
+		}) {
+			defer wg.Done()
+			metrics := getShardMetrics(sData.db, sData.name, sData.sType, sData.tables)
+			mu.Lock()
+			shardList = append(shardList, metrics)
+			mu.Unlock()
+		}(s)
+	}
+
+	// User Shards tasks
+	for i := 0; i < database.Router.GetShardCount(); i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			shardName := fmt.Sprintf("User Shard %d", idx)
+			sdb := database.Router.GetUserDB(fmt.Sprintf("internal-status-check-%d", idx))
+			metrics := getShardMetrics(sdb, shardName, "user", []string{"user_data", "chat_history", "saved_items"})
+			mu.Lock()
+			shardList = append(shardList, metrics)
+			mu.Unlock()
+		}(i)
+	}
+
+	wg.Wait()
+	shards := shardList
 
 	return c.JSON(fiber.Map{
 		"success": true,

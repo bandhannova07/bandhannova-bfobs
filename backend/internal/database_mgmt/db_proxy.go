@@ -59,20 +59,30 @@ func DatabaseProxyHandler(c *fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": true, "message": "No active shards available for this product"})
 	}
 
-	// 3. Simple Load Balancing (Random or Round Robin)
-	// For now, take the first one or implement hashing based on a context ID if provided
-	targetShard := shards[0]
-
 	// 4. Parse Query
 	var req ProxyDatabaseRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid SQL payload"})
 	}
 
-	// 5. Execute on physical shard
-	result, err := ExecuteSQL(targetShard, req.SQL)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": true, "message": err.Error()})
+	// 3. Execution with Failover Support
+	var result *QueryResult
+	var execErr error
+	success := false
+
+	for _, targetShard := range shards {
+		result, execErr = ExecuteSQL(targetShard, req.SQL)
+		if execErr == nil {
+			success = true
+			break
+		}
+	}
+
+	if !success {
+		return c.Status(500).JSON(fiber.Map{
+			"error": true, 
+			"message": "Service Unstable: All assigned shards for this product are currently unreachable.",
+		})
 	}
 
 	return c.JSON(fiber.Map{

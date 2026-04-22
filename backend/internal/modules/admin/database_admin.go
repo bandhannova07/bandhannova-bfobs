@@ -1,23 +1,24 @@
 package admin
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/bandhannova/api-hunter/internal/config"
 	"github.com/bandhannova/api-hunter/internal/database"
 	"github.com/bandhannova/api-hunter/internal/database_mgmt"
 	"github.com/bandhannova/api-hunter/internal/security"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"strings"
-	"time"
 )
 
 // ListAllDatabases returns metrics for all core and managed shards
 func ListAllDatabases(c *fiber.Ctx) error {
 	var shards []ShardStatus
-	
+
 	// Core Shards
 	shards = append(shards, getShardMetrics(database.Router.GetAuthDB(), "Auth Shard", "core", []string{"users", "sessions"}))
 	shards = append(shards, getShardMetrics(database.Router.GetAnalyticsDB(), "Analytics Shard", "core", []string{"request_logs"}))
@@ -35,12 +36,14 @@ func ListAllDatabases(c *fiber.Ctx) error {
 	})
 }
 
-// ProvisionDatabase creates a new Turso DB dynamically
+// ProvisionDatabase now handles manual registration of pre-created Turso DBs (Replaces automatic provisioning)
 func ProvisionDatabase(c *fiber.Ctx) error {
 	ip, _ := c.Locals("admin_ip").(string)
 	var req struct {
 		Name      string `json:"name"`
 		Category  string `json:"category"`
+		URL       string `json:"db_url"`
+		Token     string `json:"token"`
 		ProductID string `json:"product_id"`
 	}
 
@@ -48,53 +51,42 @@ func ProvisionDatabase(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
 	}
 
-	// 1. Create on Turso
-	dbInfo, err := database_mgmt.CreateTursoDatabase(req.Name)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": fmt.Sprintf("Turso Creation Failed: %v", err)})
+	if req.URL == "" || req.Token == "" || req.Name == "" {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Name, URL and Token are required for manual shard addition"})
 	}
 
-	// 2. Create Token
-	token, err := database_mgmt.CreateTursoToken(req.Name)
+	// 1. Test Connection
+	testDB, err := database.ConnectTurso(req.URL, req.Token)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Token Generation Failed"})
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Failed to connect to the provided Turso URL: " + err.Error()})
 	}
+	defer testDB.Close()
 
-	dbURL := fmt.Sprintf("libsql://%s", dbInfo.Hostname)
+	// 2. Encrypt Token
+	encrypted, _ := security.Encrypt(req.Token, config.AppConfig.BandhanNovaMasterKey)
 
-	// 3. Encrypt Token
-	encrypted, _ := security.Encrypt(token, config.AppConfig.BandhanNovaMasterKey)
-
-	// 4. Register in Global Manager
+	// 3. Register in Global Manager
 	id := uuid.New().String()
+	slug := strings.ToLower(strings.ReplaceAll(req.Name, " ", "-")) + "-" + uuid.New().String()[:6]
+	now := time.Now().Unix()
+
 	_, err = database.Router.GetGlobalManagerDB().Exec(
-		"INSERT INTO managed_databases (id, slug, name, category, db_url, encrypted_token, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		id, req.Name, req.Name, req.Category, dbURL, encrypted, time.Now().Unix(), time.Now().Unix(),
+		"INSERT INTO managed_databases (id, slug, name, category, db_url, encrypted_token, product_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+		id, slug, req.Name, req.Category, req.URL, encrypted, req.ProductID, now, now,
 	)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to register database locally"})
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to register shard: " + err.Error()})
 	}
 
-	// 5. Reload Managed DBs
+	// 4. Reload Managed DBs
 	database_mgmt.ReloadManagedDatabases()
 
-	// 6. AUTO-SYNC: Run Master Schema if exists for the product
-	if req.ProductID != "" {
-		var schema sql.NullString
-		database.Router.GetGlobalManagerDB().QueryRow("SELECT master_schema FROM managed_products WHERE id = ?", req.ProductID).Scan(&schema)
-		if schema.Valid && schema.String != "" {
-			database_mgmt.ExecuteSQL(req.Name, schema.String)
-		}
-	}
-
-	LogAudit("PROVISION_DB", req.Name, ip, fmt.Sprintf("Provisioned new shard: %s (%s)", req.Name, req.Category))
+	LogAudit("ADD_PRODUCT_SHARD", req.Name, ip, fmt.Sprintf("Manually added shard: %s for product %s", req.Name, req.ProductID))
 
 	return c.JSON(fiber.Map{
 		"success": true,
-		"db": fiber.Map{
-			"url":   dbURL,
-			"token": token,
-		},
+		"message": "Shard added successfully and linked to product",
+		"slug":    slug,
 	})
 }
 
@@ -102,10 +94,10 @@ func ProvisionDatabase(c *fiber.Ctx) error {
 func BulkExecuteSQLHandler(c *fiber.Ctx) error {
 	ip, _ := c.Locals("admin_ip").(string)
 	var req struct {
-		ProductID string   `json:"product_id"`
-		ShardSlugs []string `json:"shard_slugs"`
-		SQL        string   `json:"sql"`
-		SaveToMaster bool    `json:"save_to_master"`
+		ProductID    string   `json:"product_id"`
+		ShardSlugs   []string `json:"shard_slugs"`
+		SQL          string   `json:"sql"`
+		SaveToMaster bool     `json:"save_to_master"`
 	}
 
 	if err := c.BodyParser(&req); err != nil {
@@ -123,16 +115,27 @@ func BulkExecuteSQLHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	// 2. Execute on each selected shard
+	// 2. Execute on each selected shard in parallel
 	results := make(map[string]interface{})
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
 	for _, slug := range req.ShardSlugs {
-		res, err := database_mgmt.ExecuteSQL(slug, req.SQL)
-		if err != nil {
-			results[slug] = fiber.Map{"success": false, "error": err.Error()}
-		} else {
-			results[slug] = fiber.Map{"success": true, "result": res}
-		}
+		wg.Add(1)
+		go func(s string) {
+			defer wg.Done()
+			res, err := database_mgmt.ExecuteSQL(s, req.SQL)
+
+			mu.Lock()
+			if err != nil {
+				results[s] = fiber.Map{"success": false, "error": err.Error()}
+			} else {
+				results[s] = fiber.Map{"success": true, "result": res}
+			}
+			mu.Unlock()
+		}(slug)
 	}
+	wg.Wait()
 
 	LogAudit("BULK_SQL_EXEC", req.ProductID, ip, fmt.Sprintf("Executed SQL on %d shards", len(req.ShardSlugs)))
 
@@ -156,7 +159,7 @@ func ExecuteSQLHandler(c *fiber.Ctx) error {
 
 	// Safety check: Don't allow destructive queries on core shards via UI unless specifically allowed
 	// For now, allow everything for the "Master Admin"
-	
+
 	result, err := database_mgmt.ExecuteSQL(req.Shard, req.SQL)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": err.Error()})

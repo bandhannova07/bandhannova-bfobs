@@ -106,6 +106,62 @@ func ProvisionDatabase(c *fiber.Ctx) error {
 	})
 }
 
+// UpdateDatabase handles modifying existing shard credentials
+func UpdateDatabase(c *fiber.Ctx) error {
+	id := c.Params("id")
+	ip, _ := c.Locals("admin_ip").(string)
+	var req struct {
+		Name      string `json:"name"`
+		URL       string `json:"db_url"`
+		Token     string `json:"token"`
+		ProductID string `json:"product_id"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
+	}
+
+	// Find the shard
+	var targetGDB *sql.DB
+	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+		var exists int
+		err := gDB.QueryRow("SELECT 1 FROM managed_databases WHERE id = ?", id).Scan(&exists)
+		if err == nil && exists == 1 {
+			targetGDB = gDB
+			break
+		}
+	}
+
+	if targetGDB == nil {
+		return c.Status(404).JSON(fiber.Map{"error": true, "message": "Shard not found"})
+	}
+
+	now := time.Now().Unix()
+	if req.Token != "" {
+		encrypted, _ := security.Encrypt(req.Token, config.AppConfig.BandhanNovaMasterKey)
+		_, err := targetGDB.Exec(
+			"UPDATE managed_databases SET name = ?, db_url = ?, encrypted_token = ?, updated_at = ? WHERE id = ?",
+			req.Name, req.URL, encrypted, now, id,
+		)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": true, "message": "Update failed"})
+		}
+	} else {
+		_, err := targetGDB.Exec(
+			"UPDATE managed_databases SET name = ?, db_url = ?, updated_at = ? WHERE id = ?",
+			req.Name, req.URL, now, id,
+		)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": true, "message": "Update failed"})
+		}
+	}
+
+	database_mgmt.ReloadManagedDatabases()
+	LogAudit("UPDATE_SHARD", req.Name, ip, fmt.Sprintf("Updated shard credentials for ID: %s", id))
+
+	return c.JSON(fiber.Map{"success": true, "message": "Shard updated successfully"})
+}
+
 // BulkExecuteSQLHandler executes SQL on multiple shards for a specific product
 func BulkExecuteSQLHandler(c *fiber.Ctx) error {
 	ip, _ := c.Locals("admin_ip").(string)

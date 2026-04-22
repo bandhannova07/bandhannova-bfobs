@@ -209,6 +209,13 @@ func QueryInfrastructureShard(c *fiber.Ctx) error {
 // ClearInfrastructureShard wipes ALL database objects for a total reset
 func ClearInfrastructureShard(c *fiber.Ctx) error {
 	id := c.Params("id")
+
+	var req struct {
+		MasterKey string `json:"master_key"`
+	}
+	if err := c.BodyParser(&req); err != nil || req.MasterKey != config.AppConfig.BandhanNovaMasterKey {
+		return c.Status(401).JSON(fiber.Map{"error": true, "message": "Security Verification Failed: Invalid Master Key"})
+	}
 	
 	var shard struct {
 		URL   string `db:"db_url"`
@@ -316,6 +323,13 @@ func RemoveInfrastructureShard(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "ID is required"})
+	}
+
+	var req struct {
+		MasterKey string `json:"master_key"`
+	}
+	if err := c.BodyParser(&req); err != nil || req.MasterKey != config.AppConfig.BandhanNovaMasterKey {
+		return c.Status(401).JSON(fiber.Map{"error": true, "message": "Security Verification Failed: Invalid Master Key"})
 	}
 
 	// Protect critical infrastructure

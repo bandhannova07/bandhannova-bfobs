@@ -544,6 +544,13 @@ func RemoveDatabase(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "ID is required"})
 	}
 
+	var req struct {
+		MasterKey string `json:"master_key"`
+	}
+	if err := c.BodyParser(&req); err != nil || req.MasterKey != config.AppConfig.BandhanNovaMasterKey {
+		return c.Status(401).JSON(fiber.Map{"error": true, "message": "Security Verification Failed: Invalid Master Key"})
+	}
+
 	ip := c.IP()
 	tx, err := database.Router.GetGlobalManagerDB().Begin()
 	if err != nil {

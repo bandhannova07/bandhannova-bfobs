@@ -23,13 +23,17 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
   const [shards, setShards] = useState<Shard[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedShard, setSelectedShard] = useState<Shard | null>(null);
   
   const [formData, setFormData] = useState({
     name: "",
     db_url: "",
     token: ""
   });
+  const [deleteConfirm, setDeleteConfirm] = useState({ masterKey: "", text: "" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadShards = async () => {
     setLoading(true);
@@ -63,6 +67,8 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
         setIsModalOpen(false);
         setFormData({ name: "", db_url: "", token: "" });
         loadShards();
+      } else {
+        alert(res.message || "Failed to add shard");
       }
     } catch (err: any) {
       alert("Connection Failed: " + err.message);
@@ -71,16 +77,65 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
     }
   };
 
-  const handleRemove = async (id: string) => {
-    if (!confirm("Are you sure you want to PERMANENTLY decommission this shard?")) return;
+  const handleEditShard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedShard) return;
+    setIsSubmitting(true);
     try {
-      const res = await fetchAPI(`/admin/db/remove/${id}`, { method: "POST" });
+      const res = await fetchAPI(`/admin/db/update/${selectedShard.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ ...formData, product_id: product.id })
+      });
       if (res.success) {
+        setIsEditModalOpen(false);
         loadShards();
+      } else {
+        alert(res.message || "Update failed");
       }
     } catch (err: any) {
-      alert("Error: " + err.message);
+      alert("Update failed: " + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const handleRemove = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedShard) return;
+    if (deleteConfirm.text !== "DELETE") {
+      alert("Please type DELETE to confirm");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetchAPI(`/admin/db/remove/${selectedShard.id}`, {
+        method: "POST",
+        body: JSON.stringify({ master_key: deleteConfirm.masterKey })
+      });
+      if (res.success) {
+        setIsDeleteModalOpen(false);
+        setDeleteConfirm({ masterKey: "", text: "" });
+        loadShards();
+      } else {
+        alert(res.message || "Removal failed");
+      }
+    } catch (err: any) {
+      alert("Removal failed: " + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openEdit = (db: Shard) => {
+    setSelectedShard(db);
+    setFormData({ name: db.name, db_url: db.db_url, token: "" });
+    setIsEditModalOpen(true);
+  };
+
+  const openDelete = (db: Shard) => {
+    setSelectedShard(db);
+    setIsDeleteModalOpen(true);
   };
 
   return (
@@ -111,11 +166,11 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
                </div>
                <code className={styles.shardURL}>{db.db_url}</code>
                <div className={styles.shardFooter}>
-                  <div className={styles.shardStatus}>
-                     <div className={styles.statusDot}></div>
-                     CONNECTED
+                  <div className={styles.shardActions}>
+                     <button className="btn btn-glass" style={{fontSize: '11px', padding: '6px 12px'}} onClick={() => openEdit(db)}>Edit</button>
+                     <button className="btn btn-glass" style={{fontSize: '11px', padding: '6px 12px'}} onClick={() => alert("Inspector coming soon...")}>Inspect</button>
                   </div>
-                  <button className="btn btn-glass" style={{fontSize: '11px', padding: '6px 12px'}} onClick={() => handleRemove(db.id)}>Decommission</button>
+                  <button className="btn btn-glass" style={{fontSize: '11px', padding: '6px 12px', color: 'var(--danger)'}} onClick={() => openDelete(db)}>Decommission</button>
                </div>
             </div>
           ))}
@@ -174,7 +229,94 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
           </div>
         </div>
       )}
+
+      {/* ─── Edit Shard Modal ────────────────────────── */}
+      {isEditModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={`glass-panel ${styles.modalContent}`}>
+            <div className={styles.modalHeader}>
+               <h3>Edit Shard Credentials</h3>
+               <p>Update display name or URL for {selectedShard?.name}</p>
+            </div>
+            <form onSubmit={handleEditShard} className={styles.uploadForm}>
+               <div className={styles.field}>
+                  <label>Display Name</label>
+                  <input 
+                    className={styles.confirmInput}
+                    type="text" 
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  />
+               </div>
+               <div className={styles.field}>
+                  <label>Database URL</label>
+                  <input 
+                    className={styles.confirmInput}
+                    type="text" 
+                    value={formData.db_url}
+                    onChange={(e) => setFormData({...formData, db_url: e.target.value})}
+                  />
+               </div>
+               <div className={styles.field}>
+                  <label>New Token (Leave blank to keep current)</label>
+                  <input 
+                    className={styles.confirmInput}
+                    type="password" 
+                    placeholder="New access token"
+                    value={formData.token}
+                    onChange={(e) => setFormData({...formData, token: e.target.value})}
+                  />
+               </div>
+               <div className={styles.modalActions}>
+                  <button type="button" className={styles.clearBtn} onClick={() => setIsEditModalOpen(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={isSubmitting}>Update Shard</button>
+               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Delete Confirmation Modal ──────────────── */}
+      {isDeleteModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={`glass-panel ${styles.modalContent}`}>
+            <div className={styles.modalHeader}>
+               <h3 style={{color: 'var(--danger)'}}>Destructive Action</h3>
+               <p>You are about to decommission <strong>{selectedShard?.name}</strong>. This cannot be undone.</p>
+            </div>
+            <form onSubmit={handleRemove} className={styles.uploadForm}>
+               <div className={styles.field}>
+                  <label>Admin Master Key</label>
+                  <input 
+                    className={styles.confirmInput}
+                    type="password" 
+                    placeholder="Enter Master Key"
+                    value={deleteConfirm.masterKey}
+                    onChange={(e) => setDeleteConfirm({...deleteConfirm, masterKey: e.target.value})}
+                    required
+                  />
+               </div>
+               <div className={styles.field}>
+                  <label>Type <strong>DELETE</strong> to confirm</label>
+                  <input 
+                    className={styles.confirmInput}
+                    type="text" 
+                    placeholder="DELETE"
+                    value={deleteConfirm.text}
+                    onChange={(e) => setDeleteConfirm({...deleteConfirm, text: e.target.value})}
+                    required
+                  />
+               </div>
+               <div className={styles.modalActions}>
+                  <button type="button" className={styles.clearBtn} onClick={() => setIsDeleteModalOpen(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" style={{background: 'var(--danger)'}} disabled={isSubmitting}>
+                    {isSubmitting ? "Processing..." : "Confirm Destruction"}
+                  </button>
+               </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

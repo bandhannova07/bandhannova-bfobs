@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import styles from "../page.module.css";
 import { fetchAPI } from "../../../../../lib/api";
+import DatabaseViewer from "./DatabaseViewer";
 
 interface Shard {
   id: string;
@@ -338,40 +339,12 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
         </div>
       )}
 
-      {/* ─── Inspector Modal ────────────────────────── */}
-      {isInspectModalOpen && (
-        <div className={styles.modalOverlay}>
-          <div className={`glass-panel ${styles.modalContent} ${styles.inspectModal}`}>
-            <div className={styles.modalHeader}>
-               <h3>Shard Explorer</h3>
-               <p>Exploring <strong>{selectedShard?.name}</strong> Tables</p>
-            </div>
-            
-            <div className={styles.inspectorBody}>
-               {inspecting ? (
-                 <div className={styles.loading}>SCANNING TABLES...</div>
-               ) : tables.length === 0 ? (
-                 <div className={styles.emptyState}>No tables found in this shard.</div>
-               ) : (
-                 <div className={styles.tableList}>
-                    {tables.map(table => (
-                      <div key={table} className={styles.tableItem}>
-                         <div className={styles.tableInfo}>
-                            <span className={styles.tableIcon}>📊</span>
-                            <span className={styles.tableName}>{table}</span>
-                         </div>
-                         <button className="btn btn-glass" style={{fontSize: '10px'}} onClick={() => alert("Quick view coming soon...")}>View</button>
-                      </div>
-                    ))}
-                 </div>
-               )}
-            </div>
-
-            <div className={styles.modalActions}>
-               <button className="btn btn-primary" onClick={() => setIsInspectModalOpen(false)}>Close Explorer</button>
-            </div>
-          </div>
-        </div>
+      {/* ─── Inspector Modal (Legacy replaced by Viewer) ─── */}
+      {isInspectModalOpen && selectedShard && (
+        <DatabaseViewer 
+          shard={selectedShard} 
+          onClose={() => setIsInspectModalOpen(false)} 
+        />
       )}
     </div>
   );

@@ -22,7 +22,7 @@ Every product within the BandhanNova ecosystem is assigned a dedicated **Infrast
 ## 2. Infrastructure Protocol (\`bdn-bfobs://\`)
 We use a custom orchestration protocol to manage distributed shards. This allows your backend to remain agnostic of the underlying Turso database location.
 
-**Standard Pattern:**
+**Standard Pattern (Example):**
 \`bdn-bfobs://{product_slug}/{gateway_code}/gateway/\`
 
 - **Usage:** This URL is used by the BandhanNova Global Router to resolve your active shards in real-time. 
@@ -34,7 +34,7 @@ We use a custom orchestration protocol to manage distributed shards. This allows
 Never connect directly to your Turso shards from your client-side apps. Always use the **BFOBS Proxy**.
 
 ### Execute SQL Queries
-**Endpoint:** \`POST /api/db/p/:product_slug/execute\`
+**Endpoint (Example):** \`POST /api/db/p/:product_slug/execute\`
 
 **Request Headers:**
 | Header | Value | Description |
@@ -55,10 +55,10 @@ Never connect directly to your Turso shards from your client-side apps. Always u
 ## 4. Storage & CDN (Hugging Face LFS)
 Your product is automatically provisioned with an LFS-backed storage bucket.
 
-### View/Download Files
+### View/Download Files (Example)
 **URL Pattern:** \`/api/storage/view/:product_slug/:bucket_name/:file_path\`
 
-### Uploading Assets
+### Uploading Assets (Example)
 Use the **Storage View** in your Product Portal to manage buckets. Developers can upload assets via the portal or use the multi-tenant upload endpoint:
 **Endpoint:** \`POST /api/storage/upload/:product_slug/:bucket_name\`
 

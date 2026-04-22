@@ -5,6 +5,7 @@ import styles from "../page.module.css";
 import { API_URL } from "@/lib/constants";
 
 interface Product {
+  id: string;
   name: string;
   slug: string;
 }
@@ -34,6 +35,7 @@ interface StorageViewProps {
 export default function StorageView({ product }: StorageViewProps) {
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasDatabase, setHasDatabase] = useState(false);
   const [activeBucket, setActiveBucket] = useState<Bucket | null>(null);
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
@@ -53,8 +55,34 @@ export default function StorageView({ product }: StorageViewProps) {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchBuckets();
+    checkDatabaseAndFetchBuckets();
   }, [product.slug]);
+
+  const checkDatabaseAndFetchBuckets = async () => {
+    setLoading(true);
+    try {
+      const token = sessionStorage.getItem("admin_token");
+      
+      // 1. Check if database shards exist
+      const dbRes = await fetch(`${API_URL}/admin/databases?product_id=${product.id}`, {
+        headers: { "X-Admin-Token": token || "" }
+      });
+      const dbData = await dbRes.json();
+      const hasDB = dbData.success && dbData.databases && dbData.databases.length > 0;
+      setHasDatabase(hasDB);
+
+      // 2. Fetch buckets
+      const res = await fetch(`${API_URL}/storage/p/${product.slug}/buckets`, {
+        headers: { "X-Admin-Token": token || "" }
+      });
+      const data = await res.json();
+      if (data.success) setBuckets(data.buckets || []);
+    } catch (err) {
+      console.error("Failed to sync storage infrastructure", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchBuckets = async () => {
     try {
@@ -66,12 +94,11 @@ export default function StorageView({ product }: StorageViewProps) {
       if (data.success) setBuckets(data.buckets || []);
     } catch (err) {
       console.error("Failed to fetch buckets", err);
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleCreateBucket = async () => {
+    if (!hasDatabase) return;
     try {
       const token = sessionStorage.getItem("admin_token");
       const res = await fetch(`${API_URL}/storage/p/${product.slug}/buckets`, {
@@ -191,10 +218,23 @@ export default function StorageView({ product }: StorageViewProps) {
     <div className={styles.tabContent}>
       <div className={styles.sectionHeader}>
         <h2 className={styles.sectionTitle}>Managed Storage Buckets</h2>
-        <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-          + New Bucket
+        <button 
+          className="btn btn-primary" 
+          onClick={() => setShowCreateModal(true)}
+          disabled={!hasDatabase}
+          style={!hasDatabase ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+        >
+          {hasDatabase ? "+ New Bucket" : "Database Required"}
         </button>
       </div>
+
+      {!hasDatabase && (
+        <div className="glass-panel" style={{ padding: "15px", marginBottom: "20px", borderLeft: "4px solid #ef4444", background: "rgba(239, 68, 68, 0.05)" }}>
+          <p style={{ margin: 0, fontSize: "14px", color: "#ef4444" }}>
+            <strong>⚠️ Storage Locked:</strong> You must link at least one <strong>Database Shard</strong> to this product before creating storage buckets. Storage metadata requires a database to function.
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <div className={styles.loading}>SYNCING STORAGE BUCKET...</div>
@@ -202,7 +242,14 @@ export default function StorageView({ product }: StorageViewProps) {
         <div className={styles.emptyState}>
           <div className={styles.emptyIcon}>🗃️</div>
           <p>No dedicated buckets assigned to this product.</p>
-          <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={() => setShowCreateModal(true)}>Create First Bucket</button>
+          <button 
+            className="btn btn-primary" 
+            style={!hasDatabase ? { marginTop: '20px', opacity: 0.5, cursor: "not-allowed" } : { marginTop: '20px' }} 
+            onClick={() => setShowCreateModal(true)}
+            disabled={!hasDatabase}
+          >
+            {hasDatabase ? "Create First Bucket" : "Link Database First"}
+          </button>
         </div>
       ) : (
         <div className={styles.bucketGrid}>
@@ -314,7 +361,13 @@ export default function StorageView({ product }: StorageViewProps) {
             </div>
             <div className={styles.modalActions}>
               <button className={styles.clearBtn} onClick={() => setShowCreateModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleCreateBucket}>Create Bucket</button>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleCreateBucket}
+                disabled={!hasDatabase}
+              >
+                {hasDatabase ? "Create Bucket" : "Missing Database"}
+              </button>
             </div>
           </div>
         </div>

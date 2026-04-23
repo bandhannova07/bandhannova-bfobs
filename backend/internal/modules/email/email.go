@@ -215,7 +215,7 @@ func RelayEmailHandler(c *fiber.Ctx) error {
 	}
 
 	// 2. Fallback to custom SMTP providers from DB
-	db := database.Router.GetCoreDB()
+	db := database.Router.GetCoreMasterDB()
 	var host, user, pass, encryption, fromEmail string
 	var port int
 	err := db.QueryRow("SELECT host, port, username, password, encryption, from_email FROM managed_smtp_providers WHERE status = 'active' LIMIT 1").Scan(

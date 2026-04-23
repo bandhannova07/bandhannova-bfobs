@@ -22,7 +22,7 @@ type SMTPProvider struct {
 
 // ListSMTPProviders returns all configured SMTP relays
 func ListSMTPProviders(c *fiber.Ctx) error {
-	db := database.Router.GetCoreDB()
+	db := database.Router.GetCoreMasterDB()
 	rows, err := db.Query("SELECT id, name, host, port, username, encryption, from_email, status, created_at FROM managed_smtp_providers")
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": err.Error()})
@@ -52,7 +52,7 @@ func AddSMTPProvider(c *fiber.Ctx) error {
 	p.CreatedAt = time.Now().Unix()
 	if p.Status == "" { p.Status = "active" }
 
-	db := database.Router.GetCoreDB()
+	db := database.Router.GetCoreMasterDB()
 	_, err := db.Exec(
 		"INSERT INTO managed_smtp_providers (id, name, host, port, username, password, encryption, from_email, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		p.ID, p.Name, p.Host, p.Port, p.Username, p.Password, p.Encryption, p.FromEmail, p.Status, p.CreatedAt,
@@ -68,7 +68,7 @@ func AddSMTPProvider(c *fiber.Ctx) error {
 // DeleteSMTPProvider removes a relay
 func DeleteSMTPProvider(c *fiber.Ctx) error {
 	id := c.Params("id")
-	db := database.Router.GetCoreDB()
+	db := database.Router.GetCoreMasterDB()
 	_, err := db.Exec("DELETE FROM managed_smtp_providers WHERE id = ?", id)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": err.Error()})

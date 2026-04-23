@@ -288,6 +288,7 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
       {isInspectModalOpen && selectedShard && (
         <DatabaseViewer
           shard={selectedShard}
+          productSlug={product.slug}
           onClose={() => setIsInspectModalOpen(false)}
         />
       )}

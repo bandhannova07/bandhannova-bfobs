@@ -9,10 +9,11 @@ interface ShardStudioProps {
     name: string;
     db_url: string;
   };
+  productSlug: string; // Passed from parent context
   onClose: () => void;
 }
 
-export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
+export default function DatabaseViewer({ shard, productSlug, onClose }: ShardStudioProps) {
   const [tables, setTables] = useState<string[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [columns, setColumns] = useState<any[]>([]);
@@ -164,7 +165,6 @@ export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
   };
 
   const execBulkSQL = async (sql: string) => {
-    const productSlug = shard.slug.split("-shard")[0];
     return await fetchAPI(`/admin/db/execute-bulk`, {
       method: "POST",
       body: JSON.stringify({ product_slug: productSlug, sql }),
@@ -265,7 +265,7 @@ export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
       const res = await fetchAPI(`/admin/db/reset-fleet`, {
         method: "POST",
         body: JSON.stringify({
-          product_slug: shard.slug.split("-shard")[0],
+          product_slug: productSlug,
           infra_id: infraId
         }),
       });

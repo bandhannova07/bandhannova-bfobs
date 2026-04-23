@@ -9,10 +9,11 @@ interface ShardStudioProps {
     name: string;
     type: string; // Shard Category/Type
   };
+  productSlug?: string; // Optional for product-specific shards
   onClose: () => void;
 }
 
-export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
+export default function DatabaseViewer({ shard, productSlug, onClose }: ShardStudioProps) {
   const [tables, setTables] = useState<string[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [columns, setColumns] = useState<any[]>([]);
@@ -199,6 +200,37 @@ export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
     } catch (err: any) { alert("Error: " + err.message); } finally { setFetching(false); }
   };
 
+  const resetFleet = async () => {
+    if (!productSlug) return alert("System infrastructure cannot be reset via Fleet Studio. Use Core Master tools.");
+    const infraId = prompt("⚠️ CRITICAL ACTION: Enter Infrastructure ID to factory reset ALL shards for this product:");
+    if (!infraId) return;
+
+    if (!confirm("ARE YOU ABSOLUTELY SURE? This will DELETE ALL DATA across the entire fleet and cannot be undone!")) return;
+
+    setFetching(true);
+    try {
+      const res = await fetchAPI(`/admin/db/reset-fleet`, {
+        method: "POST",
+        body: JSON.stringify({
+          product_slug: productSlug,
+          infra_id: infraId
+        }),
+      });
+
+      if (res.success) {
+        alert("Fleet successfully reset to factory defaults.");
+        setSelectedTable(null);
+        loadTables();
+      } else {
+        alert("Reset failed: " + res.message);
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setFetching(false);
+    }
+  };
+
   return (
     <div className={styles.studioRoot}>
       <header className={styles.studioTopBar}>
@@ -241,6 +273,13 @@ export default function DatabaseViewer({ shard, onClose }: ShardStudioProps) {
                    ))}
                </div>
             </div>
+            {productSlug && (
+               <div className={styles.sidebarBottom}>
+                  <button className={styles.resetFleetBtn} onClick={resetFleet}>
+                     <span className={styles.resetIcon}>⚡</span> Factory Reset Fleet
+                  </button>
+               </div>
+            )}
          </aside>
 
          <main className={styles.studioMain}>

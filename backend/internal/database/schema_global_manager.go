@@ -48,6 +48,32 @@ CREATE TABLE IF NOT EXISTS oauth_clients (
     FOREIGN KEY (product_id) REFERENCES managed_products(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS managed_smtp_providers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    host TEXT NOT NULL,
+    port INTEGER NOT NULL,
+    username TEXT NOT NULL,
+    password TEXT NOT NULL, -- Encrypted
+    encryption TEXT DEFAULT 'tls', -- tls, ssl, or none
+    from_email TEXT NOT NULL,
+    status TEXT DEFAULT 'active',
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS managed_mail_logs (
+    id TEXT PRIMARY KEY,
+    product_id TEXT,
+    provider_id TEXT,
+    to_email TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    status TEXT DEFAULT 'pending', -- sent, failed, pending
+    error_message TEXT,
+    timestamp INTEGER NOT NULL,
+    FOREIGN KEY (product_id) REFERENCES managed_products(id),
+    FOREIGN KEY (provider_id) REFERENCES managed_smtp_providers(id)
+);
+
 CREATE TABLE IF NOT EXISTS oauth_authorizations (
     code TEXT PRIMARY KEY,
     client_id TEXT NOT NULL,

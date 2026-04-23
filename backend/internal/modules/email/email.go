@@ -15,6 +15,8 @@ import (
 	"github.com/bandhannova/api-hunter/internal/proxy"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"net/smtp"
+	"crypto/tls"
 )
 
 var ResendKM *proxy.KeyManager
@@ -135,6 +137,106 @@ func ProxyEmailSend(c *fiber.Ctx) error {
 	}
 
 	return c.Status(resp.StatusCode).Send(body)
+}
+
+// SendViaSMTP sends an email using a custom SMTP configuration
+func SendViaSMTP(host string, port int, user, pass, encryption, from, to, subject, body string) error {
+	auth := smtp.PlainAuth("", user, pass, host)
+	
+	msg := []byte(fmt.Sprintf("To: %s\r\nSubject: %s\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s", to, subject, body))
+	
+	addr := fmt.Sprintf("%s:%d", host, port)
+
+	if encryption == "ssl" || encryption == "tls" {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: true,
+			ServerName:         host,
+		}
+
+		conn, err := tls.Dial("tcp", addr, tlsConfig)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+
+		c, err := smtp.NewClient(conn, host)
+		if err != nil {
+			return err
+		}
+
+		if err = c.Auth(auth); err != nil {
+			return err
+		}
+
+		if err = c.Mail(from); err != nil {
+			return err
+		}
+
+		if err = c.Rcpt(to); err != nil {
+			return err
+		}
+
+		w, err := c.Data()
+		if err != nil {
+			return err
+		}
+
+		_, err = w.Write(msg)
+		if err != nil {
+			return err
+		}
+
+		err = w.Close()
+		if err != nil {
+			return err
+		}
+
+		return c.Quit()
+	}
+
+	// Standard SMTP
+	return smtp.SendMail(addr, auth, from, []string{to}, msg)
+}
+
+// RelayEmailHandler is the high-level handler for the hybrid relay
+func RelayEmailHandler(c *fiber.Ctx) error {
+	var req EmailRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	// 1. Try Resend first (if keys available)
+	if len(config.AppConfig.ResendKeys) > 0 {
+		err := ProxyEmailSend(c)
+		if err == nil {
+			return nil
+		}
+		log.Printf("⚠️ Resend failed, falling back to custom SMTP: %v", err)
+	}
+
+	// 2. Fallback to custom SMTP providers from DB
+	db := database.Router.GetCoreDB()
+	var host, user, pass, encryption, fromEmail string
+	var port int
+	err := db.QueryRow("SELECT host, port, username, password, encryption, from_email FROM managed_smtp_providers WHERE status = 'active' LIMIT 1").Scan(
+		&host, &port, &user, &pass, &encryption, &fromEmail,
+	)
+
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "No available mail providers configured"})
+	}
+
+	// Wrap branding
+	if !strings.Contains(req.HTML, "<!DOCTYPE html>") {
+		req.HTML = wrapWithBranding(req.HTML)
+	}
+
+	err = SendViaSMTP(host, port, user, pass, encryption, fromEmail, req.To[0], req.Subject, req.HTML)
+	if err != nil {
+		return c.Status(502).JSON(fiber.Map{"error": fmt.Sprintf("SMTP Relay failed: %v", err)})
+	}
+
+	return c.JSON(fiber.Map{"success": true, "message": "Email relayed successfully via custom SMTP"})
 }
 
 // ResendWebhookPayload represents the inbound mail structure from Resend

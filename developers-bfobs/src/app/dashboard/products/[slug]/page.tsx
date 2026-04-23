@@ -10,6 +10,7 @@ import DatabaseView from "./components/DatabaseView";
 import StorageView from "./components/StorageView";
 import SQLEditor from "./components/SQLEditor";
 import OverviewTab from "./components/OverviewTab";
+import MailView from "./components/MailView";
 
 interface Product {
   id: string;
@@ -124,6 +125,12 @@ export default function ProductDetailDashboard() {
         >
           <span className={styles.tabIcon}>⚡</span> SQL Forge
         </button>
+        <button 
+          className={`${styles.tab} ${activeTab === "mail" ? styles.activeTab : ""}`}
+          onClick={() => setActiveTab("mail")}
+        >
+          <span className={styles.tabIcon}>📧</span> Mail Studio
+        </button>
       </nav>
 
       {/* ─── Tab Content ────────────────────────────── */}
@@ -132,6 +139,7 @@ export default function ProductDetailDashboard() {
         {activeTab === "database" && <DatabaseView product={product} />}
         {activeTab === "storage" && <StorageView product={product} />}
         {activeTab === "sql" && <SQLEditor product={product} />}
+        {activeTab === "mail" && <MailView product={product} />}
       </div>
     </div>
   );

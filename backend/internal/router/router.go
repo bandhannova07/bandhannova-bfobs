@@ -136,7 +136,11 @@ func SetupRoutes(app *fiber.App) {
 	// Utility APIs
 	api.Post("/search", search.ProxyTavily)              // AI Search
 	api.Post("/market/quote", market.ProxyTwelveData)    // Stock quotes
-	api.Post("/email/send", email.ProxyEmailSend)        // Send emails
+	api.Post("/email/send", email.RelayEmailHandler)     // Unified Relay (Resend + Custom SMTP)
+	api.Get("/email/providers", email.ListSMTPProviders)  // List SMTP Relays
+	api.Post("/email/providers", email.AddSMTPProvider)   // Add SMTP Relay
+	api.Delete("/email/providers/:id", email.DeleteSMTPProvider) // Remove SMTP Relay
+	api.Post("/email/webhook", email.HandleEmailWebhook) // Inbound mails
 
 	// Universal API Proxy Gateway (Rotation + Logging)
 	api.All("/proxy/:provider/*", api_proxy.ProxyHandler)

@@ -1,0 +1,66 @@
+TERMINAL OUTPUT
+PURGE
+🚀 Orchestrated execution across 5 shards.
+✅ bdn-blogs-shard-1-e21684 — 10 rows returned (after 4 statement(s))
+id	node_name	status	ping_count	last_verified
+1	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:16:08Z
+2	Data-Core-Beta	syncing	50	2026-04-22T17:16:08Z
+3	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:27:00Z
+4	Data-Core-Beta	syncing	50	2026-04-22T17:27:01Z
+5	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:36:37Z
+6	Data-Core-Beta	syncing	50	2026-04-22T17:36:37Z
+7	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:42:54Z
+8	Data-Core-Beta	syncing	50	2026-04-22T17:42:55Z
+9	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:43:26Z
+10	Data-Core-Beta	syncing	50	2026-04-22T17:43:26Z
+✅ bdn-blogs-shard-2-1b6c89 — 10 rows returned (after 4 statement(s))
+id	node_name	status	ping_count	last_verified
+1	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:16:08Z
+2	Data-Core-Beta	syncing	50	2026-04-22T17:16:08Z
+3	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:27:00Z
+4	Data-Core-Beta	syncing	50	2026-04-22T17:27:01Z
+5	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:36:37Z
+6	Data-Core-Beta	syncing	50	2026-04-22T17:36:37Z
+7	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:42:54Z
+8	Data-Core-Beta	syncing	50	2026-04-22T17:42:54Z
+9	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:43:26Z
+10	Data-Core-Beta	syncing	50	2026-04-22T17:43:26Z
+✅ bdn-blogs-shard-3-22fc35 — 10 rows returned (after 4 statement(s))
+id	node_name	status	ping_count	last_verified
+1	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:16:08Z
+2	Data-Core-Beta	syncing	50	2026-04-22T17:16:08Z
+3	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:27:00Z
+4	Data-Core-Beta	syncing	50	2026-04-22T17:27:01Z
+5	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:36:37Z
+6	Data-Core-Beta	syncing	50	2026-04-22T17:36:37Z
+7	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:42:54Z
+8	Data-Core-Beta	syncing	50	2026-04-22T17:42:54Z
+9	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:43:26Z
+10	Data-Core-Beta	syncing	50	2026-04-22T17:43:26Z
+✅ bdn-blogs-shard-4-529f52 — 10 rows returned (after 4 statement(s))
+id	node_name	status	ping_count	last_verified
+1	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:16:08Z
+2	Data-Core-Beta	syncing	50	2026-04-22T17:16:08Z
+3	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:27:00Z
+4	Data-Core-Beta	syncing	50	2026-04-22T17:27:01Z
+5	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:36:37Z
+6	Data-Core-Beta	syncing	50	2026-04-22T17:36:37Z
+7	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:42:54Z
+8	Data-Core-Beta	syncing	50	2026-04-22T17:42:54Z
+9	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:43:26Z
+10	Data-Core-Beta	syncing	50	2026-04-22T17:43:26Z
+✅ bdn-blogs-shard-5-d84ce3 — 10 rows returned (after 4 statement(s))
+id	node_name	status	ping_count	last_verified
+1	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:16:08Z
+2	Data-Core-Beta	syncing	50	2026-04-22T17:16:08Z
+3	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:27:00Z
+4	Data-Core-Beta	syncing	50	2026-04-22T17:27:01Z
+5	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:36:37Z
+6	Data-Core-Beta	syncing	50	2026-04-22T17:36:37Z
+7	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:42:54Z
+8	Data-Core-Beta	syncing	50	2026-04-22T17:42:55Z
+9	Shard-Orchestrator-Alpha	online	100	2026-04-22T17:43:26Z
+10	Data-Core-Beta	syncing	50	2026-04-22T17:43:26Z
+
+
+5 ta shards e kaj korchhe...

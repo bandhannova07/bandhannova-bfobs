@@ -166,57 +166,6 @@ func InitGlobalManagerSchema(db *sql.DB) error {
 	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_keys_card_status ON managed_api_keys(card_id, status, is_deleted)")
 	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_cards_section ON api_cards(section_id, is_deleted)")
 
-	// Ensure "Unused APIs" section exists
-	unusedID := "unused"
-	_, _ = db.Exec("INSERT OR IGNORE INTO api_sections (id, name, created_at) VALUES (?, ?, ?)", unusedID, "Unused APIs", 0)
-
-	// Seed "Distributed Free AI" section
-	freeSectionID := "distributed-free-ai"
-	_, _ = db.Exec("INSERT OR IGNORE INTO api_sections (id, name, created_at) VALUES (?, ?, ?)", freeSectionID, "Distributed Free AI", 0)
-
-	// Seed some free cards
-	cards := []struct {
-		ID       string
-		Name     string
-		Icon     string
-		Endpoint string
-	}{
-		{"deepseek-r1-free", "DeepSeek R1 (Free)", "🧠", "/api/chat"},
-		{"llama-3-2-free", "Llama 3.2 (Free)", "🦙", "/api/chat"},
-		{"mistral-free", "Mistral (Free)", "🌪️", "/api/chat"},
-	}
-
-	for _, c := range cards {
-		_, _ = db.Exec(`
-			INSERT OR IGNORE INTO api_cards 
-			(id, section_id, name, icon, endpoint_url, platform_type, created_at) 
-			VALUES (?, ?, ?, ?, ?, 'ollama', ?)
-		`, c.ID, freeSectionID, c.Name, c.Icon, c.Endpoint, 0)
-	}
-
-	// ─── Seed "G4F Free Proxies" section ─────────────────────────────────────────
-	g4fSectionID := "g4f-proxies"
-	_, _ = db.Exec("INSERT OR IGNORE INTO api_sections (id, name, created_at) VALUES (?, ?, ?)", g4fSectionID, "G4F Free Proxies", 0)
-
-	g4fCards := []struct {
-		ID       string
-		Name     string
-		Icon     string
-		Endpoint string
-	}{
-		{"g4f-groq", "Groq (Free)", "⚡", "/chat/completions"},
-		{"g4f-gemini", "Gemini (Free)", "♊", "/chat/completions"},
-		{"g4f-pollinations", "Pollinations (Free)", "🌸", "/chat/completions"},
-	}
-
-	for _, c := range g4fCards {
-		_, _ = db.Exec(`
-			INSERT OR IGNORE INTO api_cards
-			(id, section_id, name, icon, endpoint_url, platform_type, created_at)
-			VALUES (?, ?, ?, ?, ?, 'openai_compatible', ?)
-		`, c.ID, g4fSectionID, c.Name, c.Icon, c.Endpoint, 0)
-	}
-
 	log.Println("✅ API Management migrations completed")
 	return nil
 }

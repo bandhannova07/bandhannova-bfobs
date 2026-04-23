@@ -72,19 +72,18 @@ export const deleteProduct = (id: string, masterKey: string, confirmation: strin
         body: JSON.stringify({ master_key: masterKey, confirmation }) 
     });
 
-// Infrastructure (Default Shards)
-export const getShards = () => fetchAPI("/admin/infrastructure/shards");
-export const addShard = (data: any) => fetchAPI("/admin/infrastructure/shards", { method: "POST", body: JSON.stringify(data) });
-export const updateShard = (id: string, data: any) => fetchAPI(`/admin/infrastructure/shards/${id}`, { method: "PUT", body: JSON.stringify(data) });
-export const removeShard = (id: string) => fetchAPI(`/admin/infrastructure/shards/${id}`, { method: "DELETE" });
-export const queryShard = (id: string, query: string) => fetchAPI(`/admin/infrastructure/shards/${id}/query`, { method: "POST", body: JSON.stringify({ query }) });
-export const clearShard = (id: string) => fetchAPI(`/admin/infrastructure/shards/${id}/clear`, { method: "POST" });
-export const initShard = (id: string) => fetchAPI(`/admin/infrastructure/shards/${id}/init`, { method: "POST" });
+// Database Execution (Correct API contract: { shard: slug, sql: query })
+export const execSQL = (shardSlug: string, sql: string) => 
+    fetchAPI("/admin/db/execute", { method: "POST", body: JSON.stringify({ shard: shardSlug, sql }) });
+export const execBulkSQL = (productSlug: string, sql: string) => 
+    fetchAPI("/admin/db/execute-bulk", { method: "POST", body: JSON.stringify({ product_slug: productSlug, sql }) });
 
-// Databases
-export const getDatabases = () => fetchAPI("/admin/databases");
-export const addDatabase = (data: any) => fetchAPI("/admin/databases", { method: "POST", body: JSON.stringify(data) });
+// Databases (Managed Shards)
+export const getDatabases = (productId?: string) => 
+    fetchAPI(`/admin/databases${productId ? `?product_id=${productId}` : ''}`);
+export const addDatabase = (data: any) => fetchAPI("/admin/db/provision", { method: "POST", body: JSON.stringify(data) });
 export const getDatabaseDetails = (slug: string) => fetchAPI(`/admin/databases/${slug}`);
 
 // Audit
 export const getAuditLogs = () => fetchAPI("/admin/audit");
+

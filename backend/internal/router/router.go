@@ -33,13 +33,13 @@ func SetupRoutes(app *fiber.App) {
 	// Cloud Storage System
 	storage := api.Group("/storage", middleware.AdminAuthRequired())
 	storage.Post("/upload", storage_mgmt.UploadToHuggingFace)
-	storage.Post("/create", storage_mgmt.CreateHuggingFaceRepo)
 	
 	// Bucket Management
 	storage.Get("/p/:product_slug/buckets", storage_mgmt.ListBuckets)
 	storage.Post("/p/:product_slug/buckets", storage_mgmt.CreateBucket)
 	storage.Delete("/buckets/:id", storage_mgmt.DeleteBucket)
 	storage.Get("/p/:product_slug/b/:bucket_slug/files", storage_mgmt.ListBucketFiles)
+	storage.Delete("/p/:product_slug/b/:bucket_slug/f/:filename", storage_mgmt.DeleteFile)
 
 	// OAuth 2.0 / BandhanNova ID Routes
 	oauth := api.Group("/oauth")
@@ -90,6 +90,8 @@ func SetupRoutes(app *fiber.App) {
 	adminAuth.Post("/db/remove/:id", database_mgmt.RemoveDatabase)
 	adminAuth.Post("/db/execute", admin.ExecuteSQLHandler)
 	adminAuth.Post("/db/execute-bulk", admin.BulkExecuteSQLHandler)
+	adminAuth.Post("/db/execute-category", admin.ExecuteCategorySQLHandler)
+	adminAuth.Post("/db/reset-fleet", admin.ResetFleetHandler)
 	adminAuth.Get("/databases", database_mgmt.ListDatabases)
 	adminAuth.Post("/databases", database_mgmt.AddDatabase)
 	adminAuth.Get("/databases/:slug", database_mgmt.GetDatabaseDetails)

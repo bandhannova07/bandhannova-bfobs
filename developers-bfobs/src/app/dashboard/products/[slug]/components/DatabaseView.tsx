@@ -6,6 +6,7 @@ import DatabaseViewer from "./DatabaseViewer";
 
 interface Shard {
   id: string;
+  slug: string;
   name: string;
   db_url: string;
   status: string;
@@ -28,14 +29,10 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isInspectModalOpen, setIsInspectModalOpen] = useState(false);
   const [selectedShard, setSelectedShard] = useState<Shard | null>(null);
-  
+
   const [formData, setFormData] = useState({ name: "", db_url: "", token: "" });
   const [deleteConfirm, setDeleteConfirm] = useState({ masterKey: "", text: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Inspector State
-  const [tables, setTables] = useState<string[]>([]);
-  const [inspecting, setInspecting] = useState(false);
 
   const loadShards = async () => {
     setLoading(true);
@@ -59,10 +56,10 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
     try {
       const res = await fetchAPI("/admin/db/provision", {
         method: "POST",
-        body: JSON.stringify({ 
-          ...formData, 
-          product_id: product.id, 
-          category: "user" 
+        body: JSON.stringify({
+          ...formData,
+          product_id: product.id,
+          category: "user"
         })
       });
       if (res.success) {
@@ -79,6 +76,8 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
     }
   };
 
+  // Backend UpdateDatabase uses `c.Params("id")` and queries `WHERE id = ?`
+  // So we must pass the real `id`, not slug
   const handleEditShard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedShard) return;
@@ -129,24 +128,12 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
     }
   };
 
-  const openInspect = async (db: Shard) => {
-    console.log("[Studio] Inspecting Shard Details:", { id: db.id, name: db.name, url: db.db_url });
+  // Open Studio — just set the shard and open modal
+  // DatabaseViewer handles its own table loading internally
+  const openInspect = (db: Shard) => {
+    console.log("[Studio] Opening Shard Studio:", { slug: db.slug, name: db.name });
     setSelectedShard(db);
     setIsInspectModalOpen(true);
-    setInspecting(true);
-    try {
-      const res = await fetchAPI(`/admin/infrastructure/shards/${db.id}/query`, {
-        method: "POST",
-        body: JSON.stringify({ query: "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'" })
-      });
-      if (res.success) {
-        setTables((res.data || []).map((t: any) => t.name));
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setInspecting(false);
-    }
   };
 
   const openEdit = (db: Shard) => {
@@ -171,29 +158,29 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
         <div className={styles.loading}>SYNCING FLEET...</div>
       ) : shards.length === 0 ? (
         <div className={styles.emptyState}>
-           <div className={styles.emptyIcon}>📡</div>
-           <p>No dedicated shards assigned to this product.</p>
-           <button className="btn btn-primary" style={{marginTop: '20px'}} onClick={() => setIsModalOpen(true)}>Link First Shard</button>
+          <div className={styles.emptyIcon}>📡</div>
+          <p>No dedicated shards assigned to this product.</p>
+          <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={() => setIsModalOpen(true)}>Link First Shard</button>
         </div>
       ) : (
         <div className={styles.dbGrid}>
           {shards.map(db => (
             <div key={db.id} className={`glass-panel ${styles.shardCard}`}>
-               <div className={styles.shardHeader}>
-                  <div className={styles.shardIcon}>🗄️</div>
-                  <div className={styles.shardMeta}>
-                     <h4>{db.name}</h4>
-                     <span className={styles.shardStatusLabel}>ACTIVE SHARD</span>
-                  </div>
-               </div>
-               <code className={styles.shardURL}>{db.db_url}</code>
-               <div className={styles.shardFooter}>
-                  <div className={styles.shardActions}>
-                     <button className="btn btn-glass" style={{fontSize: '11px', padding: '6px 12px'}} onClick={() => openEdit(db)}>Edit</button>
-                     <button className="btn btn-glass" style={{fontSize: '11px', padding: '6px 12px'}} onClick={() => openInspect(db)}>Inspect</button>
-                  </div>
-                  <button className="btn btn-glass" style={{fontSize: '11px', padding: '6px 12px', color: 'var(--danger)'}} onClick={() => openDelete(db)}>🗑️</button>
-               </div>
+              <div className={styles.shardHeader}>
+                <div className={styles.shardIcon}>🗄️</div>
+                <div className={styles.shardMeta}>
+                  <h4>{db.name}</h4>
+                  <span className={styles.shardStatusLabel}>ACTIVE SHARD</span>
+                </div>
+              </div>
+              <code className={styles.shardURL}>{db.db_url}</code>
+              <div className={styles.shardFooter}>
+                <div className={styles.shardActions} style={{ display: 'flex', gap: "7px" }}>
+                  <button className="btn btn-glass" style={{ fontSize: '11px', padding: '6px 12px' }} onClick={() => openEdit(db)}>Edit</button>
+                  <button className="btn btn-glass" style={{ fontSize: '11px', padding: '6px 12px' }} onClick={() => openInspect(db)}>Inspect</button>
+                </div>
+                <button className="btn btn-glass" style={{ fontSize: '11px', padding: '6px 12px', color: 'var(--danger)' }} onClick={() => openDelete(db)}>🗑️</button>
+              </div>
             </div>
           ))}
         </div>
@@ -204,49 +191,31 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
         <div className={styles.modalOverlay}>
           <div className={`glass-panel ${styles.modalContent}`}>
             <div className={styles.modalHeader}>
-               <h3>Register Dedicated Shard</h3>
-               <p>Connect a pre-created Turso database to this product fleet.</p>
+              <h3>Register Dedicated Shard</h3>
+              <p>Connect a pre-created Turso database to this product fleet.</p>
             </div>
             <form onSubmit={handleAddShard} className={styles.uploadForm}>
-               <div className={styles.field}>
-                  <label>Display Name</label>
-                  <input 
-                    className={styles.confirmInput}
-                    type="text" 
-                    placeholder="e.g. Primary Data Shard"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    required
-                  />
-               </div>
-               <div className={styles.field}>
-                  <label>Database URL</label>
-                  <input 
-                    className={styles.confirmInput}
-                    type="text" 
-                    placeholder="libsql://your-db.turso.io"
-                    value={formData.db_url}
-                    onChange={(e) => setFormData({...formData, db_url: e.target.value})}
-                    required
-                  />
-               </div>
-               <div className={styles.field}>
-                  <label>Access Token</label>
-                  <input 
-                    className={styles.confirmInput}
-                    type="password" 
-                    placeholder="Paste secure token here"
-                    value={formData.token}
-                    onChange={(e) => setFormData({...formData, token: e.target.value})}
-                    required
-                  />
-               </div>
-               <div className={styles.modalActions}>
-                  <button type="button" className={styles.clearBtn} onClick={() => setIsModalOpen(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-                    {isSubmitting ? "Verifying..." : "Link Shard"}
-                  </button>
-               </div>
+              <div className={styles.field}>
+                <label>Display Name</label>
+                <input className={styles.confirmInput} type="text" placeholder="e.g. Primary Data Shard"
+                  value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+              </div>
+              <div className={styles.field}>
+                <label>Database URL</label>
+                <input className={styles.confirmInput} type="text" placeholder="libsql://your-db.turso.io"
+                  value={formData.db_url} onChange={(e) => setFormData({ ...formData, db_url: e.target.value })} required />
+              </div>
+              <div className={styles.field}>
+                <label>Access Token</label>
+                <input className={styles.confirmInput} type="password" placeholder="Paste secure token here"
+                  value={formData.token} onChange={(e) => setFormData({ ...formData, token: e.target.value })} required />
+              </div>
+              <div className={styles.modalActions}>
+                <button type="button" className={styles.clearBtn} onClick={() => setIsModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                  {isSubmitting ? "Verifying..." : "Link Shard"}
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -257,42 +226,29 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
         <div className={styles.modalOverlay}>
           <div className={`glass-panel ${styles.modalContent}`}>
             <div className={styles.modalHeader}>
-               <h3>Edit Shard Credentials</h3>
-               <p>Update display name or URL for {selectedShard?.name}</p>
+              <h3>Edit Shard Credentials</h3>
+              <p>Update display name or URL for {selectedShard?.name}</p>
             </div>
             <form onSubmit={handleEditShard} className={styles.uploadForm}>
-               <div className={styles.field}>
-                  <label>Display Name</label>
-                  <input 
-                    className={styles.confirmInput}
-                    type="text" 
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  />
-               </div>
-               <div className={styles.field}>
-                  <label>Database URL</label>
-                  <input 
-                    className={styles.confirmInput}
-                    type="text" 
-                    value={formData.db_url}
-                    onChange={(e) => setFormData({...formData, db_url: e.target.value})}
-                  />
-               </div>
-               <div className={styles.field}>
-                  <label>New Token (Leave blank to keep current)</label>
-                  <input 
-                    className={styles.confirmInput}
-                    type="password" 
-                    placeholder="New access token"
-                    value={formData.token}
-                    onChange={(e) => setFormData({...formData, token: e.target.value})}
-                  />
-               </div>
-               <div className={styles.modalActions}>
-                  <button type="button" className={styles.clearBtn} onClick={() => setIsEditModalOpen(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" disabled={isSubmitting}>Update Shard</button>
-               </div>
+              <div className={styles.field}>
+                <label>Display Name</label>
+                <input className={styles.confirmInput} type="text" value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+              </div>
+              <div className={styles.field}>
+                <label>Database URL</label>
+                <input className={styles.confirmInput} type="text" value={formData.db_url}
+                  onChange={(e) => setFormData({ ...formData, db_url: e.target.value })} />
+              </div>
+              <div className={styles.field}>
+                <label>New Token (Leave blank to keep current)</label>
+                <input className={styles.confirmInput} type="password" placeholder="New access token" value={formData.token}
+                  onChange={(e) => setFormData({ ...formData, token: e.target.value })} />
+              </div>
+              <div className={styles.modalActions}>
+                <button type="button" className={styles.clearBtn} onClick={() => setIsEditModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={isSubmitting}>Update Shard</button>
+              </div>
             </form>
           </div>
         </div>
@@ -303,48 +259,36 @@ export default function DatabaseView({ product }: DatabaseViewProps) {
         <div className={styles.modalOverlay}>
           <div className={`glass-panel ${styles.modalContent}`}>
             <div className={styles.modalHeader}>
-               <h3 style={{color: 'var(--danger)'}}>Destructive Action</h3>
-               <p>You are about to decommission <strong>{selectedShard?.name}</strong>. This cannot be undone.</p>
+              <h3 style={{ color: 'var(--danger)' }}>Destructive Action</h3>
+              <p>You are about to decommission <strong>{selectedShard?.name}</strong>. This cannot be undone.</p>
             </div>
             <form onSubmit={handleRemove} className={styles.uploadForm}>
-               <div className={styles.field}>
-                  <label>Admin Master Key</label>
-                  <input 
-                    className={styles.confirmInput}
-                    type="password" 
-                    placeholder="Enter Master Key"
-                    value={deleteConfirm.masterKey}
-                    onChange={(e) => setDeleteConfirm({...deleteConfirm, masterKey: e.target.value})}
-                    required
-                  />
-               </div>
-               <div className={styles.field}>
-                  <label>Type <strong>DELETE</strong> to confirm</label>
-                  <input 
-                    className={styles.confirmInput}
-                    type="text" 
-                    placeholder="DELETE"
-                    value={deleteConfirm.text}
-                    onChange={(e) => setDeleteConfirm({...deleteConfirm, text: e.target.value})}
-                    required
-                  />
-               </div>
-               <div className={styles.modalActions}>
-                  <button type="button" className={styles.clearBtn} onClick={() => setIsDeleteModalOpen(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" style={{background: 'var(--danger)'}} disabled={isSubmitting}>
-                    {isSubmitting ? "Processing..." : "Confirm Destruction"}
-                  </button>
-               </div>
+              <div className={styles.field}>
+                <label>Admin Master Key</label>
+                <input className={styles.confirmInput} type="password" placeholder="Enter Master Key"
+                  value={deleteConfirm.masterKey} onChange={(e) => setDeleteConfirm({ ...deleteConfirm, masterKey: e.target.value })} required />
+              </div>
+              <div className={styles.field}>
+                <label>Type <strong>DELETE</strong> to confirm</label>
+                <input className={styles.confirmInput} type="text" placeholder="DELETE"
+                  value={deleteConfirm.text} onChange={(e) => setDeleteConfirm({ ...deleteConfirm, text: e.target.value })} required />
+              </div>
+              <div className={styles.modalActions}>
+                <button type="button" className={styles.clearBtn} onClick={() => setIsDeleteModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ background: 'var(--danger)' }} disabled={isSubmitting}>
+                  {isSubmitting ? "Processing..." : "Confirm Destruction"}
+                </button>
+              </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* ─── Inspector Modal (Legacy replaced by Viewer) ─── */}
+      {/* ─── Shard Studio (Full DatabaseViewer) ─── */}
       {isInspectModalOpen && selectedShard && (
-        <DatabaseViewer 
-          shard={selectedShard} 
-          onClose={() => setIsInspectModalOpen(false)} 
+        <DatabaseViewer
+          shard={selectedShard}
+          onClose={() => setIsInspectModalOpen(false)}
         />
       )}
     </div>

@@ -29,198 +29,327 @@
   margin-top: 4px;
 }
 
-.grid {
+/* Minimal Bucket Grid */
+.bucketGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 24px;
-}
-
-.card {
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  padding: 32px;
-  text-decoration: none;
-  transition: var(--transition);
-  box-shadow: var(--shadow-md);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  overflow: hidden;
-}
-
-.cardActions {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  display: flex;
-  gap: 8px;
-  z-index: 10;
-}
-
-.actionBtn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--glass-border);
-  color: var(--text-muted);
-  font-size: 14px;
-  transition: var(--transition);
-}
-
-.actionBtn:hover {
-  background: var(--primary);
-  color: white;
-  border-color: var(--primary);
-  transform: translateY(-2px);
-}
-
-.deleteBtn:hover {
-  background: var(--danger);
-  border-color: var(--danger);
-}
-
-.cardLink {
-  text-decoration: none;
-  color: inherit;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.card:hover {
-  transform: translateY(-8px);
-  border-color: var(--primary);
-  box-shadow: var(--shadow-lg), 0 0 20px var(--primary-glow);
-}
-
-.icon {
-  width: 56px;
-  height: 56px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  margin-bottom: 24px;
-  border: 1px solid var(--glass-stroke);
-}
-
-.info h3 {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--text-primary);
-  margin-bottom: 8px;
-}
-
-.info p {
-  font-size: 14px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-  margin-bottom: 24px;
-}
-
-.meta {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: auto;
-}
-
-.meta span {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--success);
-  background: var(--success-glow);
-  padding: 4px 10px;
-  border-radius: 6px;
-  width: fit-content;
-}
-
-.arrow {
-  position: absolute;
-  bottom: 32px;
-  right: 32px;
-  font-size: 20px;
-  color: var(--primary);
-  opacity: 0;
-  transform: translateX(-10px);
-  transition: var(--transition);
-}
-
-.card:hover .arrow {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-/* Modal Styling */
-.modalOverlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(8px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  padding: 24px;
-}
-
-.modal {
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  padding: 40px;
-  width: 100%;
-  max-width: 540px;
-  box-shadow: var(--shadow-lg);
-}
-
-.formGroup {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
   margin-top: 24px;
 }
 
-.formGroup label {
-  display: block;
-  font-size: 13px;
-  font-weight: 700;
-  margin-bottom: 10px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
+.minimalCard {
+  background: var(--glass-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
 }
 
-.input {
+.minimalCard:hover {
+  border-color: var(--primary);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-2px);
+}
+
+.cardIcon {
+  font-size: 24px;
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cardInfo h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.cardInfo p {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 2px 0 0 0;
+}
+
+.cardActionBtn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  font-size: 14px;
+}
+
+.minimalCard:hover .cardActionBtn {
+  opacity: 0.6;
+}
+
+.cardActionBtn:hover {
+  opacity: 1 !important;
+  transform: scale(1.1);
+}
+
+/* Side Panel / Overlay */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sidePanel {
+  width: 100%;
+  max-width: 500px;
+  background: var(--bg-dark);
+  border-left: 1px solid var(--glass-border);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.panelHeader {
+  padding: 24px;
+  border-bottom: 1px solid var(--glass-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panelHeader h3 {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.panelBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* Minimal File List */
+.fileListMinimal {
+  margin-top: 32px;
+}
+
+.fileRowMinimal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  transition: background 0.2s ease;
+  border-radius: 8px;
+}
+
+.fileRowMinimal:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.fileMain {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fileIcon {
+  font-size: 18px;
+}
+
+.fileDetails {
+  display: flex;
+  flex-direction: column;
+}
+
+.fileName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileSize {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.fileActionsMinimal {
+  display: flex;
+  gap: 12px;
+}
+
+.fileActionsMinimal button {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  transition: color 0.2s ease;
+}
+
+.fileActionsMinimal button:hover {
+  color: var(--primary);
+}
+
+.deleteText {
+  color: rgba(239, 68, 68, 0.4) !important;
+}
+
+.deleteText:hover {
+  color: #ef4444 !important;
+}
+
+/* Minimal Dropzone */
+.minimalDropzone {
+  border: 2px dashed var(--glass-border);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: block;
+  margin-bottom: 16px;
+  transition: all 0.2s ease;
+}
+
+.minimalDropzone:hover {
+  border-color: var(--primary);
+  background: rgba(0, 163, 255, 0.05);
+  color: var(--primary);
+}
+
+.uploadArea {
+  margin-bottom: 24px;
+}
+
+/* Minimal Modal */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.minimalModal {
+  background: var(--bg-dark);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 32px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.minimalModal h3 {
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.minimalModal p {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+
+.minimalField {
+  margin-bottom: 20px;
+}
+
+.minimalField label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.minimalField input {
   width: 100%;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--glass-stroke);
-  border-radius: 12px;
-  padding: 14px 18px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 12px;
   color: var(--text-primary);
-  font-size: 15px;
-  transition: var(--transition);
+  font-size: 14px;
   outline: none;
 }
 
-.input:focus {
+.minimalField input:focus {
   border-color: var(--primary);
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 0 0 4px var(--primary-glow);
 }
 
-.modalActions {
+.modalFooter {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 40px;
+  margin-top: 32px;
+}
+
+.modalFooter button {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hint {
+  font-size: 11px !important;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px;
+  border-radius: 6px;
+  font-family: monospace;
+  margin-bottom: 12px !important;
+}
+
+.hiddenInput {
+  display: none;
 }
 
 .loading {
   text-align: center;
-  padding: 100px;
+  padding: 60px;
   color: var(--text-muted);
-  font-size: 16px;
   font-weight: 600;
 }

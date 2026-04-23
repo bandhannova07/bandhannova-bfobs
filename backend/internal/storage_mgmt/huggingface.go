@@ -2,11 +2,14 @@ package storage_mgmt
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/bandhannova/api-hunter/internal/config"
@@ -15,73 +18,18 @@ import (
 	"github.com/google/uuid"
 )
 
-// CreateHuggingFaceRepo creates a new Dataset repository on Hugging Face
-func CreateHuggingFaceRepo(c *fiber.Ctx) error {
-	var req struct {
-		Name    string `json:"name"`
-		Private bool   `json:"private"`
-	}
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid payload"})
-	}
-
-	token := config.AppConfig.HFToken
-	if token == "" {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Hugging Face Token not configured"})
-	}
-
-	// HF API: POST /api/repos/create
-	apiUrl := "https://huggingface.co/api/repos/create"
-	payload := map[string]interface{}{
-		"name":    req.Name,
-		"type":    "dataset",
-		"private": req.Private,
-	}
-	
-	jsonPayload, _ := json.Marshal(payload)
-	hReq, err := http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create request"})
-	}
-
-	hReq.Header.Set("Authorization", "Bearer "+token)
-	hReq.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(hReq)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to connect to Hugging Face"})
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return c.Status(resp.StatusCode).JSON(fiber.Map{
-			"error": true,
-			"message": "Failed to create HF Dataset",
-			"details": string(body),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Cloud Storage Bucket created successfully",
-		"data":    string(body),
-	})
-}
-
-type CommitOperation struct {
-	Operation string `json:"operation"`
-	Path      string `json:"path"`
-	Content   string `json:"content"`
+type CommitFile struct {
+	Path     string `json:"path"`
+	Content  string `json:"content"`
+	Encoding string `json:"encoding"` // "base64"
 }
 
 type CommitPayload struct {
-	Summary    string            `json:"summary"`
-	Operations []CommitOperation `json:"operations"`
+	Summary string       `json:"summary"`
+	Files   []CommitFile `json:"files"`
 }
 
-// UploadToHuggingFace sends a file to a Hugging Face repository using the JSON Commit API
+// UploadToHuggingFace sends a file to a Hugging Face repository using the JSON Commit API (Standard)
 func UploadToHuggingFace(c *fiber.Ctx) error {
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -91,7 +39,7 @@ func UploadToHuggingFace(c *fiber.Ctx) error {
 	// 1. Get HF Config from Environment
 	token := config.AppConfig.HFToken
 	repo := config.AppConfig.HFStorageRepo
-	
+
 	if token == "" || repo == "" {
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Hugging Face storage not configured"})
 	}
@@ -109,30 +57,41 @@ func UploadToHuggingFace(c *fiber.Ctx) error {
 	}
 	encodedContent := base64.StdEncoding.EncodeToString(fileBytes)
 
-	// 3. Prepare JSON Payload for HF Commit API
+	// 3. Prepare file path (Rename Logic: bandhannova-{14 digits}.ext)
 	productSlug := c.FormValue("product_slug", "general")
-	bucket := c.FormValue("bucket", "uploads") // Default to uploads bucket
-	fileName := fmt.Sprintf("%d-%s", time.Now().Unix(), file.Filename)
+	bucket := c.FormValue("bucket", "uploads")
+	
+	ext := "bin"
+	if parts := strings.Split(file.Filename, "."); len(parts) > 1 {
+		ext = parts[len(parts)-1]
+	}
+	
+	// 14-digit code using timestamp: YYYYMMDDHHMMSS
+	digitCode := time.Now().Format("20060102150405")
+	fileName := fmt.Sprintf("bandhannova-%s.%s", digitCode, ext)
 	hfPath := fmt.Sprintf("%s/%s/%s", productSlug, bucket, fileName)
 
+	log.Printf("🚀 Pushing to HF Storage: %s | Repo: %s", hfPath, repo)
+
 	payload := CommitPayload{
-		Summary: fmt.Sprintf("Upload %s via BandhanNova API Hunter", fileName),
-		Operations: []CommitOperation{
+		Summary: fmt.Sprintf("Upload %s via BandhanNova BFOBS", fileName),
+		Files: []CommitFile{
 			{
-				Operation: "add",
-				Path:      hfPath,
-				Content:   encodedContent,
+				Path:     hfPath,
+				Content:  encodedContent,
+				Encoding: "base64",
 			},
 		},
 	}
 
 	jsonPayload, _ := json.Marshal(payload)
 
-	// 4. Send to Hugging Face Commit Endpoint
-	apiUrl := fmt.Sprintf("https://huggingface.co/api/datasets/%s/commit/main", repo)
+	// 4. Send to Hugging Face Commit Endpoint (Model Repository Method)
+	apiUrl := fmt.Sprintf("https://huggingface.co/api/models/%s/commit/main", repo)
 
 	req, err := http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonPayload))
 	if err != nil {
+		log.Printf("❌ Failed to create HF request: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create request"})
 	}
 
@@ -142,88 +101,135 @@ func UploadToHuggingFace(c *fiber.Ctx) error {
 	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
+		log.Printf("❌ HF Connection Error: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to connect to Hugging Face"})
 	}
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(resp.Body)
+	log.Printf("📥 HF API Response [%d]: %s", resp.StatusCode, string(respBody))
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return c.Status(resp.StatusCode).JSON(fiber.Map{
-			"error": true, 
-			"message": "Hugging Face Commit failed", 
+			"error":   true,
+			"message": "Hugging Face Commit failed",
 			"details": string(respBody),
 		})
 	}
 
-	// 5. If successful, track in Database (Supabase Style)
+	// 5. Background Tracking (Optional metadata store)
 	go func() {
-		// Resolve bucket ID
+		log.Printf("📝 Tracking file in Database: %s", fileName)
 		var bucketID string
-		err := database.Router.GetGlobalManagerDB().QueryRow(
-			"SELECT b.id FROM storage_buckets b JOIN managed_products p ON b.product_id = p.id WHERE p.slug = ? AND b.slug = ?",
-			productSlug, bucket,
-		).Scan(&bucketID)
-		
-		if err == nil {
-			// Get target DB (Product-dedicated or Global fallback)
-			db := database.Router.GetManagedDBBySlug(productSlug)
-			if db == nil {
-				db = database.Router.GetGlobalManagerDB()
+		var targetDB *sql.DB
+		for _, gdb := range database.Router.GetAllGlobalManagerDBs() {
+			err := gdb.QueryRow("SELECT b.id FROM storage_buckets b JOIN managed_products p ON b.product_id = p.id WHERE p.slug = ? AND b.slug = ?", productSlug, bucket).Scan(&bucketID)
+			if err == nil {
+				targetDB = gdb
+				break
 			}
+		}
 
-			// Ensure table exists
+		if targetDB != nil {
+			db := database.Router.GetManagedDBBySlug(productSlug)
+			if db == nil { db = targetDB }
 			_, _ = db.Exec(StorageAssetsSchema)
-
 			assetID := uuid.New().String()
 			contentType := file.Header.Get("Content-Type")
-			_, _ = db.Exec(
-				"INSERT INTO storage_assets (id, bucket_id, name, path, size, content_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-				assetID, bucketID, fileName, hfPath, file.Size, contentType, time.Now().Unix(),
-			)
+			_, _ = db.Exec("INSERT INTO storage_assets (id, bucket_id, name, path, size, content_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", assetID, bucketID, fileName, hfPath, file.Size, contentType, time.Now().Unix())
 		}
 	}()
 
-	// 6. Return the URL
-	// Updated to show the new bucket-based proxy URL
-	proxyUrl := fmt.Sprintf("/storage/view/%s/%s/%s", productSlug, bucket, fileName)
-	rawUrl := fmt.Sprintf("https://huggingface.co/datasets/%s/resolve/main/%s", repo, hfPath)
-
 	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "File committed to " + bucket + " bucket",
-		"file_info": fiber.Map{
-			"name":      fileName,
-			"bucket":    bucket,
-			"path":      hfPath,
-			"proxy_url": proxyUrl,
-			"url":       rawUrl,
-			"size":      file.Size,
+		"success": true, 
+		"message": "File uploaded successfully",
+		"file": fiber.Map{
+			"name": fileName,
+			"path": hfPath,
+			"url": fmt.Sprintf("/storage/view/%s/%s/%s", productSlug, bucket, fileName),
 		},
 	})
+}
+
+// DeleteFile removes a file from Hugging Face via Commit API
+func DeleteFile(c *fiber.Ctx) error {
+	productSlug := c.Params("product_slug")
+	bucketSlug := c.Params("bucket_slug")
+	fileName := c.Params("filename")
+
+	token := config.AppConfig.HFToken
+	repo := config.AppConfig.HFStorageRepo
+
+	if token == "" || repo == "" {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Storage not configured"})
+	}
+
+	hfPath := fmt.Sprintf("%s/%s/%s", productSlug, bucketSlug, fileName)
+
+	// HF Commit API structure for deletion
+	payload := map[string]interface{}{
+		"summary": fmt.Sprintf("Delete %s via BandhanNova BFOBS", fileName),
+		"operations": []map[string]interface{}{
+			{
+				"operation": "delete",
+				"path":      hfPath,
+			},
+		},
+	}
+
+	jsonPayload, _ := json.Marshal(payload)
+	apiUrl := fmt.Sprintf("https://huggingface.co/api/models/%s/commit/main", repo)
+
+	req, err := http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to create request"})
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": true, "message": "Failed to connect to HF"})
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return c.Status(resp.StatusCode).JSON(fiber.Map{"error": true, "message": "HF Deletion failed", "details": string(body)})
+	}
+
+	// Optional: Remove from tracking DB if exists
+	go func() {
+		db := database.Router.GetManagedDBBySlug(productSlug)
+		if db == nil { db = database.Router.GetGlobalManagerDB() }
+		_, _ = db.Exec("DELETE FROM storage_assets WHERE name = ?", fileName)
+	}()
+
+	return c.JSON(fiber.Map{"success": true, "message": "File deleted successfully"})
 }
 
 // InitializeProductFolder creates a placeholder .keep file to "create" the product folder in HF
 func InitializeProductFolder(slug string) {
 	token := config.AppConfig.HFToken
 	repo := config.AppConfig.HFStorageRepo
-	if token == "" || repo == "" {
-		return
-	}
+	if token == "" || repo == "" { return }
 
 	hfPath := fmt.Sprintf("%s/.keep", slug)
 	payload := CommitPayload{
 		Summary: fmt.Sprintf("Initialize storage fleet for %s", slug),
-		Operations: []CommitOperation{
+		Files: []CommitFile{
 			{
-				Operation: "add",
-				Path:      hfPath,
-				Content:   base64.StdEncoding.EncodeToString([]byte("Infrastructure active.")),
+				Path:     hfPath,
+				Content:  base64.StdEncoding.EncodeToString([]byte("Infrastructure active.")),
+				Encoding: "base64",
 			},
 		},
 	}
 
 	jsonPayload, _ := json.Marshal(payload)
-	apiUrl := fmt.Sprintf("https://huggingface.co/api/datasets/%s/commit/main", repo)
+	apiUrl := fmt.Sprintf("https://huggingface.co/api/models/%s/commit/main", repo)
 
 	req, _ := http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonPayload))
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -231,16 +237,15 @@ func InitializeProductFolder(slug string) {
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
-	if err == nil {
-		defer resp.Body.Close()
-	}
+	if err == nil { defer resp.Body.Close() }
 }
 
 // ProxyViewFile allows viewing private files by proxying the request with the HF Token
 func ProxyViewFile(c *fiber.Ctx) error {
 	productSlug := c.Params("product_slug")
-	bucket := c.Params("bucket")
+	bucket := c.Params("bucket_slug")
 	fileName := c.Params("filename")
+
 	token := config.AppConfig.HFToken
 	repo := config.AppConfig.HFStorageRepo
 
@@ -249,7 +254,9 @@ func ProxyViewFile(c *fiber.Ctx) error {
 	}
 
 	hfPath := fmt.Sprintf("%s/%s/%s", productSlug, bucket, fileName)
-	apiUrl := fmt.Sprintf("https://huggingface.co/datasets/%s/resolve/main/%s", repo, hfPath)
+	apiUrl := fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", repo, hfPath)
+
+	log.Printf("🔍 Proxying Storage Request: %s", hfPath)
 
 	req, err := http.NewRequest("GET", apiUrl, nil)
 	if err != nil {
@@ -258,23 +265,37 @@ func ProxyViewFile(c *fiber.Ctx) error {
 
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	client := &http.Client{Timeout: 300 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
+		log.Printf("❌ HF Proxy Error: %v", err)
 		return c.Status(500).SendString("Failed to connect to storage")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("⚠️ HF Proxy returned %d for path: %s", resp.StatusCode, hfPath)
 		return c.Status(resp.StatusCode).SendString("File not found or access denied")
 	}
 
-	// Copy headers for content type and length
-	c.Set("Content-Type", resp.Header.Get("Content-Type"))
-	c.Set("Content-Length", resp.Header.Get("Content-Length"))
-	c.Set("Cache-Control", "public, max-age=3600")
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return c.Status(500).SendString("Failed to read storage response")
+	}
 
-	// Stream the body
-	_, err = io.Copy(c, resp.Body)
-	return err
+	// 1. Get Content-Type from HF or fallback to detection
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" || contentType == "application/octet-stream" {
+		if strings.HasSuffix(strings.ToLower(fileName), ".png") { contentType = "image/png"
+		} else if strings.HasSuffix(strings.ToLower(fileName), ".jpg") || strings.HasSuffix(strings.ToLower(fileName), ".jpeg") { contentType = "image/jpeg"
+		} else if strings.HasSuffix(strings.ToLower(fileName), ".gif") { contentType = "image/gif"
+		} else if strings.HasSuffix(strings.ToLower(fileName), ".webp") { contentType = "image/webp"
+		} else if strings.HasSuffix(strings.ToLower(fileName), ".svg") { contentType = "image/svg+xml"
+		} else if strings.HasSuffix(strings.ToLower(fileName), ".mp4") { contentType = "video/mp4"
+		}
+	}
+
+	c.Set("Content-Type", contentType)
+	c.Set("Cache-Control", "public, max-age=3600")
+	return c.Send(respBody)
 }

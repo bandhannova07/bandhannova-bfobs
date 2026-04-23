@@ -9,6 +9,7 @@ interface Shard {
   name: string;
   db_url: string;
   status: string;
+  type: string;
 }
 
 interface Product {

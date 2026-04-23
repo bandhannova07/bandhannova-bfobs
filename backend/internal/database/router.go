@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/bandhannova/api-hunter/internal/security"
@@ -341,21 +342,36 @@ func (sr *ShardRouter) ReloadDynamicDBs(dbs []ManagedDB) {
 func (sr *ShardRouter) GetManagedDBBySlug(slug string) *sql.DB {
 	sr.mu.RLock()
 	defer sr.mu.RUnlock()
+	
+	log.Printf("[Router] Locating database for identifier: %s", slug)
+
+	// 1. Direct lookup in managed map
 	if mdb, ok := sr.managedDBs[slug]; ok {
 		return mdb.DB
 	}
+
+	// 2. Fuzzy lookup (case-insensitive or ID match)
+	for s, mdb := range sr.managedDBs {
+		if strings.EqualFold(s, slug) {
+			return mdb.DB
+		}
+	}
+
+	// 3. System core shards
 	if slug == "core-auth" {
 		return sr.GetAuthDB()
 	}
 	if slug == "core-analytics" {
 		return sr.GetAnalyticsDB()
 	}
-	if slug == "core-global" {
+	if slug == "core-global" || strings.HasPrefix(slug, "core-gm") {
 		return sr.GetGlobalManagerDB()
 	}
 	if slug == "core-master" {
 		return sr.coreCoreMasterDB
 	}
+
+	log.Printf("[Router] ⚠️ Failed to locate database for: %s. Available slugs: %d", slug, len(sr.managedDBs))
 	return nil
 }
 

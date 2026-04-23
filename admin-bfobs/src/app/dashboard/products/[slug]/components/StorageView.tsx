@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import styles from "../page.module.css";
-import { API_URL } from "@/lib/constants";
+import { fetchAPI } from "../../../../../lib/api";
+import { API_URL } from "../../../../../lib/constants";
 
 interface Product {
   id: string;
@@ -20,12 +21,11 @@ interface Bucket {
 }
 
 interface FileInfo {
+  name: string;
   path: string;
-  type: string;
-  size?: number;
-  lastCommit?: {
-    date: string;
-  };
+  size: number;
+  url: string;
+  last_modified?: string;
 }
 
 interface StorageViewProps {
@@ -47,7 +47,7 @@ export default function StorageView({ product }: StorageViewProps) {
   const [masterKey, setMasterKey] = useState("");
 
   // New Bucket Form
-  const [newBucket, setNewBucket] = useState({ name: "", description: "", is_public: false });
+  const [newBucket, setNewBucket] = useState({ name: "", slug: "", description: "", is_public: true });
 
   // Upload
   const [uploading, setUploading] = useState(false);
@@ -61,22 +61,12 @@ export default function StorageView({ product }: StorageViewProps) {
   const checkDatabaseAndFetchBuckets = async () => {
     setLoading(true);
     try {
-      const token = sessionStorage.getItem("admin_token");
-      
-      // 1. Check if database shards exist
-      const dbRes = await fetch(`${API_URL}/admin/databases?product_id=${product.id}`, {
-        headers: { "X-Admin-Token": token || "" }
-      });
-      const dbData = await dbRes.json();
-      const hasDB = dbData.success && dbData.databases && dbData.databases.length > 0;
-      setHasDatabase(hasDB);
+      // 1. Check if database shards exist (minimal check)
+      const dbData = await fetchAPI(`/admin/databases?product_id=${product.id}`);
+      setHasDatabase(dbData.success && dbData.databases && dbData.databases.length > 0);
 
       // 2. Fetch buckets
-      const res = await fetch(`${API_URL}/storage/p/${product.slug}/buckets`, {
-        headers: { "X-Admin-Token": token || "" }
-      });
-      const data = await res.json();
-      if (data.success) setBuckets(data.buckets || []);
+      await fetchBuckets();
     } catch (err) {
       console.error("Failed to sync storage infrastructure", err);
     } finally {
@@ -86,11 +76,7 @@ export default function StorageView({ product }: StorageViewProps) {
 
   const fetchBuckets = async () => {
     try {
-      const token = sessionStorage.getItem("admin_token");
-      const res = await fetch(`${API_URL}/storage/p/${product.slug}/buckets`, {
-        headers: { "X-Admin-Token": token || "" }
-      });
-      const data = await res.json();
+      const data = await fetchAPI(`/storage/p/${product.slug}/buckets`);
       if (data.success) setBuckets(data.buckets || []);
     } catch (err) {
       console.error("Failed to fetch buckets", err);
@@ -98,27 +84,23 @@ export default function StorageView({ product }: StorageViewProps) {
   };
 
   const handleCreateBucket = async () => {
-    if (!hasDatabase) return;
     try {
-      const token = sessionStorage.getItem("admin_token");
-      const res = await fetch(`${API_URL}/storage/p/${product.slug}/buckets`, {
+      const data = await fetchAPI(`/storage/p/${product.slug}/buckets`, {
         method: "POST",
-        headers: {
-          "X-Admin-Token": token || "",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(newBucket)
+        body: JSON.stringify({
+          name: newBucket.name,
+          slug: newBucket.slug || newBucket.name.toLowerCase().replace(/\s+/g, '-')
+        })
       });
-      const data = await res.json();
       if (data.success) {
         setShowCreateModal(false);
-        setNewBucket({ name: "", description: "", is_public: false });
+        setNewBucket({ name: "", slug: "", description: "", is_public: true });
         fetchBuckets();
       } else {
-        alert(data.message + (data.details ? ": " + data.details : ""));
+        alert(data.message);
       }
-    } catch (err) {
-      alert("Failed to create bucket");
+    } catch (err: any) {
+      alert("Failed to create bucket: " + err.message);
     }
   };
 
@@ -131,15 +113,12 @@ export default function StorageView({ product }: StorageViewProps) {
     }
 
     try {
-      const token = sessionStorage.getItem("admin_token");
-      const res = await fetch(`${API_URL}/storage/buckets/${showDeleteModal.id}?confirm=${encodeURIComponent(confirmText)}`, {
+      const data = await fetchAPI(`/storage/buckets/${showDeleteModal.id}?confirm=${encodeURIComponent(confirmText)}`, {
         method: "DELETE",
         headers: {
-          "X-Admin-Token": token || "",
           "X-BandhanNova-Master-Key": masterKey
         }
       });
-      const data = await res.json();
       if (data.success) {
         setShowDeleteModal(null);
         setConfirmText("");
@@ -148,8 +127,8 @@ export default function StorageView({ product }: StorageViewProps) {
       } else {
         alert(data.message);
       }
-    } catch (err) {
-      alert("Delete failed");
+    } catch (err: any) {
+      alert("Delete failed: " + err.message);
     }
   };
 
@@ -158,11 +137,7 @@ export default function StorageView({ product }: StorageViewProps) {
     setLoadingFiles(true);
     setFiles([]);
     try {
-      const token = sessionStorage.getItem("admin_token");
-      const res = await fetch(`${API_URL}/storage/p/${product.slug}/b/${bucket.slug}/files`, {
-        headers: { "X-Admin-Token": token || "" }
-      });
-      const data = await res.json();
+      const data = await fetchAPI(`/storage/p/${product.slug}/b/${bucket.slug}/files`);
       if (data.success) setFiles(data.files || []);
     } catch (err) {
       console.error("Failed to fetch files", err);
@@ -171,12 +146,11 @@ export default function StorageView({ product }: StorageViewProps) {
     }
   };
 
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpload = async () => {
     if (!selectedFile || !activeBucket) return;
 
     setUploading(true);
-    setUploadStatus("Pushing to HF " + activeBucket.slug + "...");
+    setUploadStatus("Uploading...");
 
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -193,139 +167,133 @@ export default function StorageView({ product }: StorageViewProps) {
 
       const data = await res.json();
       if (data.success) {
-        setUploadStatus("✅ Upload Successful!");
+        setUploadStatus("✅ Done");
         setSelectedFile(null);
-        openBucket(activeBucket); // Instant refresh from DB!
+        openBucket(activeBucket);
         setTimeout(() => setUploadStatus(null), 2000);
       } else {
-        setUploadStatus("❌ Upload Failed: " + (data.message || "Unknown error"));
+        setUploadStatus("❌ Failed");
       }
     } catch (err) {
-      setUploadStatus("❌ Network Error connecting to gateway");
+      setUploadStatus("❌ Error");
     } finally {
       setUploading(false);
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert("Copied: " + text);
+  const handleDeleteFile = async (fileName: string) => {
+    if (!activeBucket || !confirm(`Delete ${fileName}?`)) return;
+
+    try {
+      const data = await fetchAPI(`/storage/p/${product.slug}/b/${activeBucket.slug}/f/${fileName}`, {
+        method: "DELETE"
+      });
+      if (data.success) {
+        openBucket(activeBucket);
+      } else {
+        alert("Delete failed");
+      }
+    } catch (err: any) {
+      alert("Error deleting file: " + err.message);
+    }
   };
 
-  if (loading) return <div className={styles.loading}>Initializing Fleet Storage...</div>;
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    // Minimal feedback
+  };
+
+  if (loading) return <div className={styles.loading}>Syncing Storage Fleet...</div>;
 
   return (
     <div className={styles.tabContent}>
       <div className={styles.sectionHeader}>
-        <h2 className={styles.sectionTitle}>Managed Storage Buckets</h2>
-        <button 
-          className="btn btn-primary" 
+        <div>
+          <h2 className={styles.sectionTitle}>Storage Explorer</h2>
+          <p className={styles.sectionSubtitle}>Manage assets for {product.name}</p>
+        </div>
+        <button
+          className="btn btn-primary"
           onClick={() => setShowCreateModal(true)}
           disabled={!hasDatabase}
-          style={!hasDatabase ? { opacity: 0.5, cursor: "not-allowed" } : {}}
         >
-          {hasDatabase ? "+ New Bucket" : "Database Required"}
+          + New Bucket
         </button>
       </div>
 
-      {!hasDatabase && (
-        <div className="glass-panel" style={{ padding: "15px", marginBottom: "20px", borderLeft: "4px solid #ef4444", background: "rgba(239, 68, 68, 0.05)" }}>
-          <p style={{ margin: 0, fontSize: "14px", color: "#ef4444" }}>
-            <strong>⚠️ Storage Locked:</strong> You must link at least one <strong>Database Shard</strong> to this product before creating storage buckets. Storage metadata requires a database to function.
-          </p>
-        </div>
-      )}
-
-      {loading ? (
-        <div className={styles.loading}>SYNCING STORAGE BUCKET...</div>
-      ) : buckets.length === 0 ? (
-        <div className={styles.emptyState}>
-          <div className={styles.emptyIcon}>🗃️</div>
-          <p>No dedicated buckets assigned to this product.</p>
-          <button 
-            className="btn btn-primary" 
-            style={!hasDatabase ? { marginTop: '20px', opacity: 0.5, cursor: "not-allowed" } : { marginTop: '20px' }} 
-            onClick={() => setShowCreateModal(true)}
-            disabled={!hasDatabase}
-          >
-            {hasDatabase ? "Create First Bucket" : "Link Database First"}
-          </button>
-        </div>
-      ) : (
-        <div className={styles.bucketGrid}>
-          {buckets.map(b => (
-            <div key={b.id} className={styles.bucketCard}>
-              <button className={styles.deleteBucketBtn} onClick={() => setShowDeleteModal(b)}>🗑️</button>
-              <div className={styles.bucketIcon}>{b.is_public ? "🌍" : "🔒"}</div>
-              <div className={styles.bucketInfo}>
-                <h4>{b.name}</h4>
-                <p>{b.description || "No description provided."}</p>
-              </div>
-              <div className={styles.bucketMeta}>
-                <span className={`${styles.badge} ${b.is_public ? styles.publicBadge : styles.privateBadge}`}>
-                  {b.is_public ? "Public" : "Private"}
-                </span>
-                <code>/{b.slug}</code>
-              </div>
-              <div className={styles.bucketActions}>
-                <button className={styles.actionBtn} onClick={() => copyToClipboard(`${API_URL}/storage/upload?bucket=${b.slug}`)}>
-                  🔗 Upload URL
-                </button>
-                <button className={styles.actionBtn} onClick={() => copyToClipboard(`${window.location.origin.replace('3000', '8080')}/storage/view/${product.slug}/${b.slug}/{file}`)}>
-                  🖼️ View URL
-                </button>
-                <button className={`${styles.actionBtn} btn-primary`} style={{ gridColumn: "span 2", marginTop: "5px" }} onClick={() => openBucket(b)}>
-                  📂 Open Bucket
-                </button>
-              </div>
+      <div className={styles.bucketGrid}>
+        {buckets.map(b => (
+          <div key={b.id} className={styles.minimalCard} onClick={() => openBucket(b)}>
+            <div className={styles.cardIcon}>📦</div>
+            <div className={styles.cardInfo}>
+              <h3>{b.name}</h3>
+              <p>/{b.slug}</p>
             </div>
-          ))}
-        </div>
-      )}
+            <button
+              className={styles.cardActionBtn}
+              onClick={(e) => { e.stopPropagation(); setShowDeleteModal(b); }}
+            >
+              🗑️
+            </button>
+            <button
+              className="btn btn-glass"
+              style={{position: 'absolute', bottom: '12px', left: '12px', right: '12px', fontSize: '11px'}}
+              onClick={() => openBucket(b)}
+            >
+              Inspect Bucket</button>
+          </div>
+        ))}
+      </div>
 
-      {/* File Explorer Overlay */}
+      {/* Centered File Explorer Overlay */}
       {activeBucket && (
-        <div className={styles.explorerOverlay}>
-          <div className={styles.explorerContent}>
-            <div className={styles.explorerHeader}>
-              <h3>📂 {activeBucket.name} <small style={{ opacity: 0.5, fontSize: "12px" }}>/{activeBucket.slug}</small></h3>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button className="btn btn-secondary" style={{ background: "rgba(0,163,255,0.1)", color: "var(--primary)" }} onClick={() => openBucket(activeBucket)}>
-                  🔄 Refresh
-                </button>
-                <button className="btn btn-secondary" onClick={() => setActiveBucket(null)}>Close</button>
-              </div>
+        <div className={styles.overlay}>
+          <div className={styles.sidePanel}>
+            <div className={styles.panelHeader}>
+              <h3>{activeBucket.name}</h3>
+              <button className={styles.closeBtn} onClick={() => setActiveBucket(null)}>✕</button>
             </div>
 
-            <div className={styles.explorerContent} style={{ padding: "32px", background: "rgba(255,255,255,0.01)" }}>
-              <form onSubmit={handleUpload} className={styles.uploadForm} style={{ flexDirection: "row", alignItems: "center" }}>
+            <div className={styles.panelBody}>
+              {/* Simple Upload */}
+              <div className={styles.uploadArea}>
                 <input
                   type="file"
-                  id="file-explorer-upload"
+                  id="file-up"
                   className={styles.hiddenInput}
                   onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)}
                 />
-                <label htmlFor="file-explorer-upload" className={styles.dropZone} style={{ height: "60px", flex: 1, marginBottom: 0 }}>
-                  {selectedFile ? selectedFile.name : "Select File to Push"}
+                <label htmlFor="file-up" className={styles.minimalDropzone}>
+                  {selectedFile ? selectedFile.name : "Choose File"}
                 </label>
-                <button type="submit" className="btn btn-primary" disabled={uploading || !selectedFile} style={{ height: "60px", padding: "0 40px" }}>
-                  {uploading ? "..." : "Push File"}
-                </button>
-              </form>
-              {uploadStatus && <div className={styles.statusMsg}>{uploadStatus}</div>}
+                {selectedFile && (
+                  <button className="btn btn-primary" onClick={handleUpload} disabled={uploading}>
+                    {uploading ? "..." : "Upload Asset"}
+                  </button>
+                )}
+                {uploadStatus && <p className={styles.statusText}>{uploadStatus}</p>}
+              </div>
 
-              <div className={styles.fileList}>
+              <div className={styles.fileListMinimal}>
                 {loadingFiles ? (
-                  <div className={styles.loading}>Scanning HF Repository...</div>
+                  <p>Syncing bucket data...</p>
                 ) : files.length === 0 ? (
-                  <div className={styles.emptyExplorer}>This bucket is empty.</div>
+                  <p style={{textAlign: 'center', padding: '40px', opacity: 0.5}}>No assets found in this bucket.</p>
                 ) : (
-                  files.filter(f => !f.path.endsWith('.keep')).map(f => (
-                    <div key={f.path} className={styles.fileRow}>
-                      <div className={styles.fileIcon}>{f.type === 'file' ? "📄" : "📁"}</div>
-                      <div className={styles.fileName}>{f.path.split('/').pop()}</div>
-                      <div className={styles.fileSize}>{f.size ? (f.size / 1024).toFixed(1) + " KB" : "-"}</div>
-                      <div className={styles.fileDate}>{f.lastCommit?.date ? new Date(f.lastCommit.date).toLocaleDateString() : "-"}</div>
+                  files.map(f => (
+                    <div key={f.path} className={styles.fileRowMinimal}>
+                      <div className={styles.fileMain}>
+                        <span className={styles.fileIcon}>📄</span>
+                        <div className={styles.fileDetails}>
+                          <span className={styles.fileName}>{f.name}</span>
+                          <span className={styles.fileSize}>{(f.size / 1024).toFixed(1)} KB</span>
+                        </div>
+                      </div>
+                      <div className={styles.fileActionsMinimal}>
+                        <button onClick={() => copyToClipboard(f.url)} className={styles.fileActionsMinimalBtn} title="Copy URL">Copy URL</button>
+                        <button onClick={() => window.open(f.url, '_blank')} className={styles.fileActionsMinimalBtn} title="View">View</button>
+                        <button onClick={() => handleDeleteFile(f.name)} className={styles.deleteText} title="Delete Asset">🗑️</button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -337,37 +305,30 @@ export default function StorageView({ product }: StorageViewProps) {
 
       {/* Create Bucket Modal */}
       {showCreateModal && (
-        <div className={styles.modal}>
-          <div className={styles.modalContent}>
-            <h3>Create New Bucket</h3>
-            <p>Define a new logical storage container.</p>
-            <div className={styles.field}>
-              <label>Bucket Name</label>
+        <div className={styles.modalOverlay}>
+          <div className={styles.minimalModal}>
+            <h3>Provision New Bucket</h3>
+            <div className={styles.minimalField}>
+              <label>Bucket Display Name</label>
               <input
                 className={styles.confirmInput}
-                placeholder="e.g. User Avatars"
                 value={newBucket.name}
                 onChange={e => setNewBucket({ ...newBucket, name: e.target.value })}
+                placeholder="e.g. Media Assets"
               />
             </div>
-            <div className={styles.field}>
-              <label>Description</label>
+            <div className={styles.minimalField}>
+              <label>Bucket Slug</label>
               <input
                 className={styles.confirmInput}
-                placeholder="What is this bucket for?"
-                value={newBucket.description}
-                onChange={e => setNewBucket({ ...newBucket, description: e.target.value })}
+                value={newBucket.slug}
+                onChange={e => setNewBucket({ ...newBucket, slug: e.target.value })}
+                placeholder="e.g. media-assets"
               />
             </div>
-            <div className={styles.modalActions}>
-              <button className={styles.clearBtn} onClick={() => setShowCreateModal(false)}>Cancel</button>
-              <button 
-                className="btn btn-primary" 
-                onClick={handleCreateBucket}
-                disabled={!hasDatabase}
-              >
-                {hasDatabase ? "Create Bucket" : "Missing Database"}
-              </button>
+            <div className={styles.modalFooter}>
+              <button onClick={() => setShowCreateModal(false)}>Discard</button>
+              <button className="btn btn-primary" onClick={handleCreateBucket}>Create Bucket</button>
             </div>
           </div>
         </div>
@@ -375,38 +336,34 @@ export default function StorageView({ product }: StorageViewProps) {
 
       {/* Delete Bucket Modal */}
       {showDeleteModal && (
-        <div className={styles.modal}>
-          <div className={styles.modalContent}>
+        <div className={styles.modalOverlay}>
+          <div className={styles.minimalModal}>
             <h3 style={{ color: "var(--neon-red)" }}>Decommission Bucket</h3>
-            <p>This action is permanent. All files in <strong>{showDeleteModal.name}</strong> will remain on HF but the bucket record will be removed.</p>
+            <p>This will remove <strong>{showDeleteModal.name}</strong> and all its assets permanently.</p>
 
-            <div className={styles.field}>
-              <label>Master Key</label>
+            <div className={styles.minimalField}>
+              <label>Infrastructure Master Key</label>
               <input
-                type="password"
                 className={styles.confirmInput}
-                placeholder="Enter BandhanNova Master Key"
+                type="password"
                 value={masterKey}
                 onChange={e => setMasterKey(e.target.value)}
               />
             </div>
 
-            <div className={styles.field}>
-              <label>Confirmation Phrase</label>
-              <p style={{ fontSize: "11px", marginBottom: "8px" }}>Type: <code>I am Bandhan, I want to delete this bucket named {showDeleteModal.name}.</code></p>
+            <div className={styles.minimalField}>
+              <label>Type phrase to confirm</label>
+              <p className={styles.hint}>I am Bandhan, I want to delete this bucket named {showDeleteModal.name}.</p>
               <input
                 className={styles.confirmInput}
-                placeholder="Type the phrase exactly"
                 value={confirmText}
                 onChange={e => setConfirmText(e.target.value)}
               />
             </div>
 
-            <div className={styles.modalActions}>
-              <button className="btn btn-secondary" onClick={() => setShowDeleteModal(null)}>Cancel</button>
-              <button className="btn btn-primary" style={{ background: "var(--neon-red)" }} onClick={handleDeleteBucket}>
-                Confirm Deletion
-              </button>
+            <div className={styles.modalFooter}>
+              <button onClick={() => setShowDeleteModal(null)}>Cancel</button>
+              <button className="btn btn-primary" style={{ background: "var(--neon-red)" }} onClick={handleDeleteBucket}>Confirm Destruction</button>
             </div>
           </div>
         </div>

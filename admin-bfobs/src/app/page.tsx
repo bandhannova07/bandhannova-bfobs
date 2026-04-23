@@ -45,12 +45,12 @@ export default function LoginPage() {
       </div>
       <div className={`glass-panel ${styles.card}`}>
         <div className={styles.logo}>
-          BandhanNova <span>BFOBS</span>
+          BandhanNova <b style={{ color: "#797bf2ff" }}>BFOBS</b>
         </div>
         <p style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: "14px" }}>
           Command Center Authentication
         </p>
-        
+
         <form className={styles.form} onSubmit={handleLogin}>
           <div className={styles.inputGroup}>
             <label>Master Key</label>
@@ -63,11 +63,11 @@ export default function LoginPage() {
               autoFocus
             />
           </div>
-          
+
           {error && <div className={styles.error}>{error}</div>}
-          
-          <button 
-            type="submit" 
+
+          <button
+            type="submit"
             className={`btn btn-primary ${styles.submitBtn}`}
             disabled={loading}
           >
@@ -76,7 +76,7 @@ export default function LoginPage() {
         </form>
 
         <div style={{ marginTop: '20px', textAlign: 'center' }}>
-          <button 
+          <button
             onClick={() => router.push("/developer/login")}
             style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}
           >

@@ -59,15 +59,16 @@ func ReloadManagedDatabases() error {
 	var mDBs []database.ManagedDB
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	var totalFound, totalLoaded, totalDecryptFail, totalConnFail int
+	var countMu sync.Mutex
 
-
-	// Actually, let's just use the router's globalManagerDBs slice
 	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
 		wg.Add(1)
 		go func(db *sql.DB) {
 			defer wg.Done()
 			rows, err := db.Query("SELECT id, slug, name, category, db_url, encrypted_token FROM managed_databases WHERE status = 'active'")
 			if err != nil {
+				log.Printf("[ReloadManaged] ❌ Failed to query managed_databases: %v", err)
 				return
 			}
 			defer rows.Close()
@@ -75,17 +76,30 @@ func ReloadManagedDatabases() error {
 			for rows.Next() {
 				var id, slug, name, category, dbURL, encrypted string
 				if err := rows.Scan(&id, &slug, &name, &category, &dbURL, &encrypted); err != nil {
+					log.Printf("[ReloadManaged] ❌ Scan error: %v", err)
 					continue
 				}
 
+				countMu.Lock()
+				totalFound++
+				countMu.Unlock()
+
 				token, err := security.Decrypt(encrypted, config.AppConfig.BandhanNovaMasterKey)
 				if err != nil {
+					log.Printf("[ReloadManaged] ❌ Decrypt failed for shard '%s' (slug: %s): %v", name, slug, err)
+					countMu.Lock()
+					totalDecryptFail++
+					countMu.Unlock()
 					continue
 				}
 
 				connStr := fmt.Sprintf("%s?authToken=%s", dbURL, token)
 				targetDB, err := sql.Open("libsql", connStr)
 				if err != nil {
+					log.Printf("[ReloadManaged] ❌ Connection failed for shard '%s' (slug: %s): %v", name, slug, err)
+					countMu.Lock()
+					totalConnFail++
+					countMu.Unlock()
 					continue
 				}
 
@@ -97,14 +111,27 @@ func ReloadManagedDatabases() error {
 					DB:       targetDB,
 				})
 				mu.Unlock()
+
+				countMu.Lock()
+				totalLoaded++
+				countMu.Unlock()
 			}
 		}(gDB)
 	}
 
 	wg.Wait()
 	database.Router.ReloadDynamicDBs(mDBs)
+
+	log.Printf("[ReloadManaged] 📊 Summary: Found=%d, Loaded=%d, DecryptFail=%d, ConnFail=%d", totalFound, totalLoaded, totalDecryptFail, totalConnFail)
+	
+	// Log all loaded slugs for debugging
+	for _, mdb := range mDBs {
+		log.Printf("[ReloadManaged] ✅ Loaded: slug='%s' name='%s' category='%s'", mdb.Slug, mdb.Name, mdb.Category)
+	}
+	
 	return nil
 }
+
 
 // ReloadManagedAPIKeys hot-reloads API keys from the global managed_api_keys table
 func ReloadManagedAPIKeys() error {

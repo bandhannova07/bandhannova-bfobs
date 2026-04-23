@@ -3,6 +3,7 @@ package admin
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -267,11 +268,14 @@ func ExecuteSQLHandler(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
 	}
 
-	// Safety check: Don't allow destructive queries on core shards via UI unless specifically allowed
-	// For now, allow everything for the "Master Admin"
+	log.Printf("[SQL Admin] Execution request for shard: %s | IP: %s", req.Shard, ip)
 
 	result, err := database_mgmt.ExecuteSQL(req.Shard, req.SQL)
 	if err != nil {
+		if strings.Contains(err.Error(), "shard not found") {
+			log.Printf("[SQL Admin] ❌ Shard not found in registry: %s", req.Shard)
+			return c.Status(404).JSON(fiber.Map{"error": true, "message": "Target database shard (" + req.Shard + ") is offline or not registered."})
+		}
 		return c.Status(400).JSON(fiber.Map{"error": true, "message": err.Error()})
 	}
 
@@ -280,5 +284,130 @@ func ExecuteSQLHandler(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"success": true,
 		"result":  result,
+	})
+}
+
+// ExecuteCategorySQLHandler executes SQL on all shards belonging to a specific category (Admin only)
+func ExecuteCategorySQLHandler(c *fiber.Ctx) error {
+	ip, _ := c.Locals("admin_ip").(string)
+	var req struct {
+		Category string `json:"category"`
+		SQL      string `json:"sql"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
+	}
+
+	// Find all shards in this category
+	var shardSlugs []string
+	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+		rows, err := gDB.Query("SELECT slug FROM managed_databases WHERE category = ? AND status = 'active'", req.Category)
+		if err == nil {
+			for rows.Next() {
+				var slug string
+				if err := rows.Scan(&slug); err == nil {
+					shardSlugs = append(shardSlugs, slug)
+				}
+			}
+			rows.Close()
+		}
+	}
+
+	if len(shardSlugs) == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": true, "message": "No active shards found in this category"})
+	}
+
+	// Parallel Execution
+	results := make(map[string]interface{})
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, slug := range shardSlugs {
+		wg.Add(1)
+		go func(s string) {
+			defer wg.Done()
+			res, err := database_mgmt.ExecuteSQL(s, req.SQL)
+			mu.Lock()
+			if err != nil {
+				results[s] = fiber.Map{"success": false, "error": err.Error()}
+			} else {
+				results[s] = fiber.Map{"success": true, "result": res}
+			}
+			mu.Unlock()
+		}(slug)
+	}
+	wg.Wait()
+
+	LogAudit("CATEGORY_SQL_EXEC", req.Category, ip, fmt.Sprintf("Executed SQL on %d shards in category %s", len(shardSlugs), req.Category))
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"results": results,
+		"shards_executed": len(shardSlugs),
+	})
+}
+
+// ResetFleetHandler performs a factory reset on all shards for a specific product (Requires Infra ID)
+func ResetFleetHandler(c *fiber.Ctx) error {
+	ip, _ := c.Locals("admin_ip").(string)
+	var req struct {
+		ProductSlug string `json:"product_slug"`
+		InfraID     string `json:"infra_id"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": true, "message": "Invalid request"})
+	}
+
+	// 1. Verify Infrastructure ID against the product
+	var productID string
+	var verified bool
+	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+		// We use client_id (Infrastructure ID) for user-facing validation
+		err := gDB.QueryRow("SELECT id FROM managed_products WHERE slug = ? AND client_id = ?", req.ProductSlug, req.InfraID).Scan(&productID)
+		if err == nil {
+			verified = true
+			break
+		}
+	}
+
+	if !verified {
+		return c.Status(403).JSON(fiber.Map{"error": true, "message": "Unauthorized: Invalid Infrastructure ID for this product"})
+	}
+
+	// 2. Find all shards for this product
+	var shardSlugs []string
+	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
+		rows, err := gDB.Query("SELECT slug FROM managed_databases WHERE product_id = ?", productID)
+		if err == nil {
+			for rows.Next() {
+				var slug string
+				if err := rows.Scan(&slug); err == nil {
+					shardSlugs = append(shardSlugs, slug)
+				}
+			}
+			rows.Close()
+		}
+	}
+
+	// 3. Reset Each Shard (Drop all tables)
+	// We'll get all tables and drop them one by one
+	for _, slug := range shardSlugs {
+		// Get tables
+		res, err := database_mgmt.ExecuteSQL(slug, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+		if err == nil && res != nil {
+			for _, row := range res.Rows {
+				if tableName, ok := row["name"].(string); ok {
+					database_mgmt.ExecuteSQL(slug, fmt.Sprintf("DROP TABLE IF EXISTS \"%s\"", tableName))
+				}
+			}
+		}
+	}
+
+	LogAudit("FLEET_RESET", req.ProductSlug, ip, fmt.Sprintf("Factory reset performed on %d shards for product %s", len(shardSlugs), req.ProductSlug))
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"message": fmt.Sprintf("Fleet reset complete. %d shards were cleared.", len(shardSlugs)),
 	})
 }

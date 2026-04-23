@@ -363,8 +363,14 @@ func ResetFleetHandler(c *fiber.Ctx) error {
 	var productID string
 	var verified bool
 	for _, gDB := range database.Router.GetAllGlobalManagerDBs() {
-		// We use client_id (Infrastructure ID) for user-facing validation
-		err := gDB.QueryRow("SELECT id FROM managed_products WHERE slug = ? AND client_id = ?", req.ProductSlug, req.InfraID).Scan(&productID)
+		// Join with oauth_clients to find the client_id (Infrastructure ID)
+		query := `
+			SELECT p.id 
+			FROM managed_products p 
+			JOIN oauth_clients c ON p.id = c.product_id 
+			WHERE p.slug = ? AND c.client_id = ?
+		`
+		err := gDB.QueryRow(query, req.ProductSlug, req.InfraID).Scan(&productID)
 		if err == nil {
 			verified = true
 			break

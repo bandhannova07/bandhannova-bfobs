@@ -245,28 +245,38 @@ export default function StorageView({ product }: StorageViewProps) {
         </button>
       </div>
 
-      <div className={styles.bucketGrid}>
-        {buckets.map(b => (
-          <div key={b.id} className={styles.minimalCard} onClick={() => openBucket(b)}>
-            <div className={styles.cardIcon}>📦</div>
-            <div className={styles.cardInfo}>
-              <h3>{b.name}</h3>
-              <p>/{b.slug}</p>
+      {loading ? (
+        <div className={styles.loading}>SYNCING STORAGE...</div>
+      ) : buckets.length === 0 ? (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyIcon}>🗃️</div>
+          <p>No dedicated bucket assigned to this product.</p>
+          <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={() => setShowCreateModal(true)}>Create First Bucket</button>
+        </div>
+      ) : (
+        <div className={styles.bucketGrid}>
+          {buckets.map(b => (
+            <div key={b.id} className={styles.minimalCard} onClick={() => openBucket(b)}>
+              <div className={styles.cardIcon}>📦</div>
+              <div className={styles.cardInfo}>
+                <h3>{b.name}</h3>
+                <p>/{b.slug}</p>
+              </div>
+              <button
+                className={styles.cardActionBtn}
+                onClick={(e) => { e.stopPropagation(); setShowDeleteModal(b); }}
+              >
+                🗑️
+              </button>
+              <button
+                className={styles.cardViewBtn}
+                onClick={() => openBucket(b)}
+              >
+                View Bucket</button>
             </div>
-            <button
-              className={styles.cardActionBtn}
-              onClick={(e) => { e.stopPropagation(); setShowDeleteModal(b); }}
-            >
-              🗑️
-            </button>
-            <button
-              className={styles.cardViewBtn}
-              onClick={() => openBucket(b)}
-            >
-              View Bucket</button>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* File Explorer Overlay */}
       {activeBucket && (
